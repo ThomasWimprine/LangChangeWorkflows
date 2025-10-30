@@ -17,10 +17,10 @@ import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Add parent directory to path so we can import langgraph
+# Add parent directory to path so we can import prp_langgraph
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from langgraph.workflows.base_prp_workflow import BasePRPWorkflow
+from prp_langgraph.workflows.base_prp_workflow import BasePRPWorkflow
 
 
 def main():
