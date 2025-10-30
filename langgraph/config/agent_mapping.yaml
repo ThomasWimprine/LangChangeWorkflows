@@ -1,0 +1,289 @@
+# Agent Mapping Configuration
+# Maps workflow tasks to specialized agents from ~/.claude/agents/
+
+version: "1.0"
+
+# Gate Specialist Agents
+# These agents are consulted after 3 consecutive failures (3-strike rule)
+gate_specialists:
+  gate_1_tdd:
+    primary: "test-automation"
+    fallback:
+      - "python-developer"
+      - "nodejs-developer"
+    description: "Specialist for TDD cycle enforcement and test design"
+
+  gate_2_coverage:
+    primary: "test-automation"
+    fallback:
+      - "python-developer"
+      - "test-runner"
+    description: "Specialist for test coverage analysis and gap identification"
+
+  gate_3_mock:
+    primary: "python-developer"      # Language-specific
+    fallback:
+      - "nodejs-developer"
+      - "java-developer"
+      - "golang-developer"
+    description: "Specialist for refactoring mocks out of production code"
+
+  gate_4_mutation:
+    primary: "test-automation"
+    fallback:
+      - "test-runner"
+      - "python-developer"
+    description: "Specialist for mutation testing and test quality improvement"
+
+  gate_5_security:
+    primary: "security-reviewer"
+    fallback:
+      - "penetration-tester"
+      - "devsecops-specialist"
+    description: "Specialist for security vulnerabilities and remediation"
+
+  gate_6_production_ready:
+    primary: "architect-reviewer"
+    fallback:
+      - "sre-engineer"
+      - "devops-engineer"
+    description: "Specialist for production readiness and operational excellence"
+
+# Multi-Agent Workflows
+# Workflows that require coordination between multiple agents
+
+draft_prp_panel:
+  name: "Draft PRP Panel"
+  description: "Core panel for initial PRP decomposition"
+  agents:
+    - agent: "project-manager"
+      role: "coordination"
+      responsibilities:
+        - "Overall task breakdown"
+        - "Dependency management"
+        - "Timeline estimation"
+
+    - agent: "application-architect"
+      role: "architecture"
+      responsibilities:
+        - "System design"
+        - "Component identification"
+        - "Integration patterns"
+
+    - agent: "security-reviewer"
+      role: "security"
+      responsibilities:
+        - "Security requirements"
+        - "Threat modeling"
+        - "Compliance checks"
+
+    - agent: "ux-designer"
+      role: "user_experience"
+      responsibilities:
+        - "User interface requirements"
+        - "Accessibility standards"
+        - "User workflows"
+
+    - agent: "test-runner"
+      role: "testing"
+      responsibilities:
+        - "Test strategy"
+        - "Quality gates"
+        - "Acceptance criteria"
+
+    - agent: "devops-engineer"
+      role: "operations"
+      responsibilities:
+        - "Deployment strategy"
+        - "Infrastructure requirements"
+        - "Monitoring and observability"
+
+generate_prp_validation:
+  name: "Generate PRP Validation"
+  description: "Multi-agent validation for complete PRP"
+  agents:
+    - agent: "security-reviewer"
+      role: "security_validation"
+      responsibilities:
+        - "Security controls verification"
+        - "Compliance validation"
+        - "Risk assessment"
+
+    - agent: "devops-engineer"
+      role: "operational_validation"
+      responsibilities:
+        - "Deployment feasibility"
+        - "Infrastructure readiness"
+        - "SLA validation"
+
+    - agent: "business-analyst"
+      role: "business_validation"
+      responsibilities:
+        - "Business value verification"
+        - "ROI analysis"
+        - "Stakeholder alignment"
+
+# Language-Specific Agent Selection
+# Maps programming languages to appropriate developer agents
+
+language_agents:
+  python:
+    primary: "python-developer"
+    specialists:
+      - "data-scientist"          # For data/ML projects
+      - "ml-engineer"             # For ML pipelines
+      - "automation-specialist"   # For automation scripts
+
+  javascript:
+    primary: "nodejs-developer"
+    specialists:
+      - "react-developer"         # For React projects
+      - "nextjs-developer"        # For Next.js projects
+      - "web-developer"           # For general web
+
+  typescript:
+    primary: "typescript-developer"
+    specialists:
+      - "react-developer"
+      - "nextjs-developer"
+      - "nodejs-developer"
+
+  go:
+    primary: "golang-developer"
+    specialists:
+      - "kubernetes-specialist"   # For k8s operators
+      - "cloud-architect"         # For cloud-native apps
+
+  rust:
+    primary: "rust-developer"
+    specialists:
+      - "system-architect"        # For systems programming
+      - "performance-profiler"    # For high-performance apps
+
+  java:
+    primary: "java-developer"
+    specialists:
+      - "spring-developer"        # For Spring apps
+      - "architect-reviewer"      # For enterprise apps
+
+  bash:
+    primary: "script-automation-expert"
+    specialists:
+      - "devops-engineer"
+      - "sre-engineer"
+
+# Framework-Specific Agent Selection
+frameworks:
+  django:
+    agent: "python-developer"
+    supplementary:
+      - "web-developer"
+      - "database-administrator"
+
+  flask:
+    agent: "python-developer"
+    supplementary:
+      - "api-designer"
+      - "web-developer"
+
+  fastapi:
+    agent: "python-developer"
+    supplementary:
+      - "api-designer"
+      - "performance-profiler"
+
+  react:
+    agent: "react-developer"
+    supplementary:
+      - "ux-designer"
+      - "web-developer"
+
+  nextjs:
+    agent: "nextjs-developer"
+    supplementary:
+      - "react-developer"
+      - "seo-specialist"
+
+  express:
+    agent: "nodejs-developer"
+    supplementary:
+      - "api-designer"
+      - "web-developer"
+
+  kubernetes:
+    agent: "kubernetes-specialist"
+    supplementary:
+      - "devops-engineer"
+      - "cloud-architect"
+
+  terraform:
+    agent: "cloud-architect"
+    supplementary:
+      - "devops-engineer"
+      - "sre-engineer"
+
+# Domain-Specific Agent Selection
+domains:
+  fintech:
+    primary: "fintech-developer"
+    compliance: "compliance-officer"
+    security: "security-reviewer"
+
+  healthcare:
+    primary: "healthtech-specialist"
+    compliance: "healthcare-compliance-specialist"
+    privacy: "legal-compliance-specialist"
+
+  proptech:
+    primary: "proptech-specialist"
+    data: "data-engineer"
+
+  e-commerce:
+    primary: "web-developer"
+    payments: "fintech-developer"
+    inventory: "database-administrator"
+
+  data-science:
+    primary: "data-scientist"
+    engineering: "ml-engineer"
+    operations: "mlops-specialist"
+
+  blockchain:
+    primary: "blockchain-developer"
+    security: "smart-contract-auditor"
+    auditor: "security-reviewer"
+
+# Agent Selection Strategy
+selection_strategy:
+  # How to choose agents when multiple options exist
+  priority_order:
+    1: "language"       # Language-specific agents first
+    2: "framework"      # Framework specialists second
+    3: "domain"         # Domain experts third
+    4: "general"        # General-purpose last resort
+
+  # Fallback behavior
+  fallback:
+    use_general_purpose: false      # Never use general-purpose
+    consult_multiple: true          # Consult all available specialists
+    aggregate_responses: true       # Combine multiple agent insights
+
+# Agent Performance Tracking
+tracking:
+  # Track which agents are most effective for each gate
+  track_success_rates: true
+  track_cost_efficiency: true
+  track_response_quality: true
+
+  # Metrics to collect
+  metrics:
+    - "success_rate_per_agent"
+    - "average_cost_per_consultation"
+    - "time_to_resolution"
+    - "specialist_effectiveness"
+    - "fallback_usage_rate"
+
+  # Reporting
+  report_interval: "weekly"
+  report_format: "json"
+  report_path: ".langgraph/metrics/agent_performance.json"
