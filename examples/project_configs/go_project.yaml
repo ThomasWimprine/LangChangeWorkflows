@@ -1,0 +1,48 @@
+# Configuration Override for Go Projects
+# Copy this to your project as .langgraph/config/gates.yaml
+
+extends: "~/.claude/langgraph/config/default_gates.yaml"
+
+# Project-specific settings
+project:
+  type: "go"
+  language: "go"
+
+  # Go directory structure (standard Go layout)
+  source_directories:
+    - "cmd/"        # Main applications
+    - "internal/"   # Private application and library code
+    - "pkg/"        # Public library code
+    - "api/"        # API definitions
+
+  test_directories:
+    - "*_test.go"   # Go tests are inline with code
+
+  # Coverage tool
+  coverage_tool: "go test"
+
+# Gate configuration
+gates:
+  gate_2_coverage:
+    enabled: true
+    threshold: 100
+    # Go specific coverage command
+    coverage_command: "go test -coverprofile=coverage.out -covermode=atomic ./..."
+    coverage_report_format: "go"
+
+  gate_3_mock:
+    enabled: true
+    # Go mock patterns
+    blocked_patterns:
+      - "gomock"          # Not allowed in production code
+      - "testify/mock"    # Not allowed in production code
+      - "mockgen"         # Not allowed in production code
+
+    # In Go, mocks are typically in *_test.go files which is fine
+    allowed_in_tests: true
+    test_file_pattern: "*_test.go"
+
+# Specialist agents
+specialist_agents:
+  gate_2_coverage: "golang-developer"
+  gate_3_mock: "golang-developer"
