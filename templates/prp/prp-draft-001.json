@@ -1,0 +1,49 @@
+{
+    "agent": "<agent_name>",
+    "atomicity": {
+        "is_atomic": true|false,
+        "reasons": [
+            "..."
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "###",
+            "agent": "<agent_name>",
+            "objective": "one-sentence",
+            "affected_components": [
+                "x"
+            ], // ≤2
+            "dependencies": [],
+            "acceptance": [
+                "..."
+            ], // 3–5 checks
+            "risk": [
+                "..."
+            ], // brief
+            "effort": "S|M|L"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "..."
+        },
+        {
+            "t-002": "..."
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "<agent>": "..."
+        },
+        {
+            "<agent>": "..."
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "<agent_name>",
+            "question": "..."
+        }
+    ]
+}

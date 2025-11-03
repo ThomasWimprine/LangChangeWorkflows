@@ -1,0 +1,632 @@
+# ClaudeAgents GraphQL Schema Template
+# Contract-first GraphQL API definition for TDD enforcement
+# Version: 1.0.0
+
+scalar DateTime
+scalar UUID
+scalar JSON
+
+# Root Query type - all read operations
+type Query {
+  # Agent queries
+  agent(id: ID!): Agent
+  agents(
+    filter: AgentFilter
+    pagination: PaginationInput
+    sort: AgentSortInput
+  ): AgentConnection!
+
+  # TDD validation queries
+  tddValidation(id: ID!): TDDValidation
+  tddValidations(
+    filter: TDDValidationFilter
+    pagination: PaginationInput
+  ): TDDValidationConnection!
+
+  # Contract validation queries
+  contractValidation(id: ID!): ContractValidation
+  contractValidations(
+    filter: ContractValidationFilter
+    pagination: PaginationInput
+  ): ContractValidationConnection!
+
+  # Test coverage queries
+  testCoverage(repository: String!, branch: String): TestCoverage
+  testCoverageHistory(
+    repository: String!
+    branch: String
+    limit: Int = 30
+  ): [TestCoverage!]!
+
+  # Compliance metrics
+  complianceMetrics(
+    repository: String
+    dateRange: DateRangeInput
+  ): ComplianceMetrics!
+
+  # Health and status
+  health: HealthStatus!
+}
+
+# Root Mutation type - all write operations
+type Mutation {
+  # Agent mutations
+  createAgent(input: CreateAgentInput!): CreateAgentPayload!
+  updateAgent(id: ID!, input: UpdateAgentInput!): UpdateAgentPayload!
+  deleteAgent(id: ID!): DeleteAgentPayload!
+
+  # TDD validation mutations
+  validateTDD(input: ValidateTDDInput!): ValidateTDDPayload!
+
+  # Contract validation mutations
+  validateContract(input: ValidateContractInput!): ValidateContractPayload!
+
+  # Coverage reporting
+  reportCoverage(input: ReportCoverageInput!): ReportCoveragePayload!
+
+  # Enforcement actions
+  enforceCompliance(input: EnforceComplianceInput!): EnforceCompliancePayload!
+
+  # Override (requires special permissions)
+  requestOverride(input: RequestOverrideInput!): RequestOverridePayload!
+}
+
+# Root Subscription type - real-time updates
+type Subscription {
+  # Agent events
+  agentCreated: Agent!
+  agentUpdated(id: ID): Agent!
+  agentDeleted: AgentDeletedEvent!
+
+  # TDD violation alerts
+  tddViolation(severity: ViolationSeverity): TDDViolation!
+
+  # Contract validation events
+  contractValidationCompleted: ContractValidation!
+
+  # Coverage updates
+  coverageUpdated(repository: String!): TestCoverage!
+
+  # Deployment gate events
+  deploymentGated: DeploymentGate!
+}
+
+# Core domain types
+
+type Agent {
+  id: ID!
+  name: String!
+  category: AgentCategory!
+  version: String!
+  description: String
+  capabilities: [String!]!
+  config: JSON
+  tddCompliant: Boolean!
+  testCoverage: Float!
+  hasContract: Boolean!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+
+  # Related data
+  validations: [TDDValidation!]!
+  tests: [TestFile!]!
+  implementations: [ImplementationFile!]!
+  violations(severity: ViolationSeverity): [TDDViolation!]!
+}
+
+type TDDValidation {
+  id: ID!
+  status: ValidationStatus!
+  passed: Boolean!
+  target: ValidationTarget!
+  violations: [TDDViolation!]!
+  metrics: TDDMetrics!
+  requestedBy: String!
+  completedAt: DateTime
+  createdAt: DateTime!
+}
+
+type TDDViolation {
+  id: ID!
+  type: ViolationType!
+  severity: ViolationSeverity!
+  file: String!
+  line: Int
+  message: String!
+  suggestion: String!
+  context: ViolationContext!
+  createdAt: DateTime!
+}
+
+type ContractValidation {
+  id: ID!
+  contractPath: String!
+  implementationPath: String!
+  contractType: ContractType!
+  valid: Boolean!
+  issues: [ContractIssue!]!
+  createdAt: DateTime!
+}
+
+type TestCoverage {
+  id: ID!
+  repository: String!
+  branch: String!
+  commit: String
+  overall: Float!
+  lines: Float!
+  branches: Float!
+  functions: Float!
+  statements: Float!
+  breakdown: [FileCoverage!]!
+  trend: CoverageTrend!
+  timestamp: DateTime!
+}
+
+type ComplianceMetrics {
+  tddComplianceRate: Float!
+  averageTestCoverage: Float!
+  contractCoverage: Float!
+  violationCount: Int!
+  violationsByType: [ViolationTypeStat!]!
+  topViolators: [FileViolationStat!]!
+  trend: ComplianceTrend!
+}
+
+type HealthStatus {
+  status: ServiceStatus!
+  timestamp: DateTime!
+  version: String!
+  tddEnforcement: TDDEnforcementStatus!
+  services: [ServiceHealth!]!
+}
+
+# Supporting types
+
+type TestFile {
+  path: String!
+  coverage: Float
+  lastModified: DateTime!
+  testsCount: Int!
+  passedCount: Int!
+}
+
+type ImplementationFile {
+  path: String!
+  hasTest: Boolean!
+  testPath: String
+  coverage: Float
+  lastModified: DateTime!
+}
+
+type ViolationContext {
+  repository: String
+  branch: String
+  commit: String
+  author: String
+  timestamp: DateTime
+}
+
+type ContractIssue {
+  type: ContractIssueType!
+  endpoint: String
+  expected: String
+  actual: String
+  message: String!
+}
+
+type FileCoverage {
+  file: String!
+  coverage: Float!
+  lines: CoverageDetail!
+  uncoveredLines: [Int!]!
+}
+
+type CoverageDetail {
+  total: Int!
+  covered: Int!
+  percentage: Float!
+}
+
+type ViolationTypeStat {
+  type: ViolationType!
+  count: Int!
+  percentage: Float!
+}
+
+type FileViolationStat {
+  file: String!
+  violationCount: Int!
+  types: [ViolationType!]!
+}
+
+type TDDEnforcementStatus {
+  enabled: Boolean!
+  lastCheck: DateTime
+  complianceRate: Float
+  activeViolations: Int
+}
+
+type ServiceHealth {
+  name: String!
+  status: ServiceStatus!
+  latency: Int
+  lastCheck: DateTime!
+}
+
+type DeploymentGate {
+  id: ID!
+  deploymentId: String!
+  environment: Environment!
+  decision: GateDecision!
+  reason: String!
+  tddCompliance: ComplianceStatus!
+  contractCompliance: ComplianceStatus!
+  timestamp: DateTime!
+}
+
+type ComplianceStatus {
+  passed: Boolean!
+  score: Float
+  violations: Int
+  details: JSON
+}
+
+type TDDMetrics {
+  testCoverage: Float!
+  filesAnalyzed: Int!
+  testsWrittenFirst: Int!
+  complianceRate: Float!
+  executionTime: Float!
+}
+
+type ComplianceTrend {
+  direction: TrendDirection!
+  changePercentage: Float!
+  period: String!
+}
+
+type AgentDeletedEvent {
+  id: ID!
+  name: String!
+  reason: String!
+  deletedBy: String!
+  timestamp: DateTime!
+}
+
+# Connection types for pagination
+
+type AgentConnection {
+  edges: [AgentEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type AgentEdge {
+  node: Agent!
+  cursor: String!
+}
+
+type TDDValidationConnection {
+  edges: [TDDValidationEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type TDDValidationEdge {
+  node: TDDValidation!
+  cursor: String!
+}
+
+type ContractValidationConnection {
+  edges: [ContractValidationEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type ContractValidationEdge {
+  node: ContractValidation!
+  cursor: String!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+# Input types
+
+input CreateAgentInput {
+  name: String!
+  category: AgentCategory!
+  description: String
+  testFiles: [String!]!
+  implementationFiles: [String!]!
+  capabilities: [String!]
+  config: JSON
+}
+
+input UpdateAgentInput {
+  name: String
+  description: String
+  capabilities: [String!]
+  config: JSON
+  testFiles: [String!]
+  implementationFiles: [String!]
+}
+
+input ValidateTDDInput {
+  target: ValidationTargetInput!
+  options: TDDValidationOptions
+}
+
+input ValidationTargetInput {
+  type: TargetType!
+  identifier: String!
+  commitRange: CommitRangeInput
+}
+
+input CommitRangeInput {
+  from: String!
+  to: String!
+}
+
+input TDDValidationOptions {
+  strictMode: Boolean = true
+  includeMetrics: Boolean = true
+  validateContracts: Boolean = false
+}
+
+input ValidateContractInput {
+  contractPath: String!
+  implementationPath: String!
+  contractType: ContractType!
+}
+
+input ReportCoverageInput {
+  repository: String!
+  branch: String!
+  commit: String
+  coverage: CoverageInput!
+}
+
+input CoverageInput {
+  overall: Float!
+  lines: Float!
+  branches: Float!
+  functions: Float!
+  statements: Float!
+  breakdown: [FileCoverageInput!]
+}
+
+input FileCoverageInput {
+  file: String!
+  coverage: Float!
+  lines: CoverageDetailInput!
+}
+
+input CoverageDetailInput {
+  total: Int!
+  covered: Int!
+}
+
+input EnforceComplianceInput {
+  repository: String!
+  branch: String!
+  action: EnforcementAction!
+  reason: String
+}
+
+input RequestOverrideInput {
+  violationId: ID!
+  reason: String!
+  duration: Int
+  approver: String
+}
+
+input AgentFilter {
+  category: AgentCategory
+  tddCompliant: Boolean
+  minCoverage: Float
+  hasContract: Boolean
+  searchTerm: String
+}
+
+input AgentSortInput {
+  field: AgentSortField!
+  direction: SortDirection!
+}
+
+input TDDValidationFilter {
+  status: ValidationStatus
+  passed: Boolean
+  repository: String
+  branch: String
+  dateRange: DateRangeInput
+}
+
+input ContractValidationFilter {
+  valid: Boolean
+  contractType: ContractType
+  dateRange: DateRangeInput
+}
+
+input DateRangeInput {
+  from: DateTime!
+  to: DateTime!
+}
+
+input PaginationInput {
+  first: Int
+  after: String
+  last: Int
+  before: String
+}
+
+# Payload types for mutations
+
+type CreateAgentPayload {
+  agent: Agent
+  userErrors: [UserError!]!
+}
+
+type UpdateAgentPayload {
+  agent: Agent
+  userErrors: [UserError!]!
+}
+
+type DeleteAgentPayload {
+  success: Boolean!
+  userErrors: [UserError!]!
+}
+
+type ValidateTDDPayload {
+  validation: TDDValidation
+  userErrors: [UserError!]!
+}
+
+type ValidateContractPayload {
+  validation: ContractValidation
+  userErrors: [UserError!]!
+}
+
+type ReportCoveragePayload {
+  coverage: TestCoverage
+  userErrors: [UserError!]!
+}
+
+type EnforceCompliancePayload {
+  success: Boolean!
+  actionsT taken: [String!]!
+  userErrors: [UserError!]!
+}
+
+type RequestOverridePayload {
+  approved: Boolean!
+  overrideToken: String
+  expiresAt: DateTime
+  userErrors: [UserError!]!
+}
+
+type UserError {
+  message: String!
+  field: [String!]
+  code: ErrorCode!
+}
+
+# Enums
+
+enum AgentCategory {
+  DEVELOPMENT
+  TESTING
+  SECURITY
+  INFRASTRUCTURE
+  DOCUMENTATION
+}
+
+enum ValidationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ViolationType {
+  NO_TEST
+  TEST_AFTER_IMPL
+  MOCK_IN_PROD
+  LOW_COVERAGE
+  NO_CONTRACT
+  BYPASS_ATTEMPT
+}
+
+enum ViolationSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum ContractType {
+  OPENAPI
+  ASYNCAPI
+  GRAPHQL
+}
+
+enum ContractIssueType {
+  MISSING_ENDPOINT
+  TYPE_MISMATCH
+  MISSING_FIELD
+  EXTRA_FIELD
+  VALIDATION_ERROR
+}
+
+enum ServiceStatus {
+  HEALTHY
+  DEGRADED
+  UNHEALTHY
+}
+
+enum Environment {
+  DEVELOPMENT
+  STAGING
+  PRODUCTION
+}
+
+enum GateDecision {
+  APPROVED
+  BLOCKED
+  WARNING
+}
+
+enum CoverageTrend {
+  IMPROVING
+  STABLE
+  DECLINING
+}
+
+enum TrendDirection {
+  UP
+  DOWN
+  STABLE
+}
+
+enum TargetType {
+  COMMIT
+  BRANCH
+  AGENT
+  FILE
+}
+
+enum EnforcementAction {
+  BLOCK_DEPLOYMENT
+  SEND_ALERT
+  CREATE_ISSUE
+  ROLLBACK
+}
+
+enum AgentSortField {
+  NAME
+  CATEGORY
+  VERSION
+  TEST_COVERAGE
+  CREATED_AT
+  UPDATED_AT
+}
+
+enum SortDirection {
+  ASC
+  DESC
+}
+
+enum ErrorCode {
+  VALIDATION_ERROR
+  NOT_FOUND
+  UNAUTHORIZED
+  FORBIDDEN
+  CONFLICT
+  INTERNAL_ERROR
+}

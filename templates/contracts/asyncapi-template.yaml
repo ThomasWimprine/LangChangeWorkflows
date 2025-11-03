@@ -1,0 +1,751 @@
+---
+asyncapi: 2.6.0
+info:
+  title: ClaudeAgents Event-Driven API Contract
+  version: 1.0.0
+  description: |
+    AsyncAPI contract template for ClaudeAgents event-driven services.
+    This template enforces TDD principles for asynchronous messaging
+    and event-driven architectures.
+  contact:
+    name: TDD Enforcement Framework
+    email: tdd@claudeagents.dev
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  development:
+    url: localhost:9092
+    protocol: kafka
+    description: Local Kafka development cluster
+    security:
+      - saslScram: []
+
+  staging:
+    url: staging.claudeagents.dev:9092
+    protocol: kafka
+    description: Staging Kafka cluster
+    security:
+      - saslScram: []
+
+  production:
+    url: kafka.claudeagents.dev:9092
+    protocol: kafka
+    description: Production Kafka cluster
+    security:
+      - saslScram: []
+
+  redis-dev:
+    url: localhost:6379
+    protocol: redis
+    description: Local Redis for pub/sub
+
+  rabbitmq-dev:
+    url: amqp://localhost:5672
+    protocol: amqp
+    description: Local RabbitMQ
+
+defaultContentType: application/json
+
+channels:
+  agent/created:
+    description: Channel for agent creation events
+    subscribe:
+      summary: Receive agent created notifications
+      operationId: onAgentCreated
+      message:
+        $ref: '#/components/messages/AgentCreatedEvent'
+      bindings:
+        kafka:
+          groupId: agent-consumers
+          clientId: agent-service
+    publish:
+      summary: Publish agent created event
+      operationId: publishAgentCreated
+      message:
+        $ref: '#/components/messages/AgentCreatedEvent'
+
+  agent/updated:
+    description: Channel for agent update events
+    subscribe:
+      summary: Receive agent update notifications
+      operationId: onAgentUpdated
+      message:
+        $ref: '#/components/messages/AgentUpdatedEvent'
+    publish:
+      summary: Publish agent updated event
+      operationId: publishAgentUpdated
+      message:
+        $ref: '#/components/messages/AgentUpdatedEvent'
+
+  agent/deleted:
+    description: Channel for agent deletion events
+    subscribe:
+      summary: Receive agent deletion notifications
+      operationId: onAgentDeleted
+      message:
+        $ref: '#/components/messages/AgentDeletedEvent'
+    publish:
+      summary: Publish agent deleted event
+      operationId: publishAgentDeleted
+      message:
+        $ref: '#/components/messages/AgentDeletedEvent'
+
+  tdd/validation/requested:
+    description: Channel for TDD validation requests
+    subscribe:
+      summary: Handle TDD validation requests
+      operationId: onTDDValidationRequested
+      message:
+        $ref: '#/components/messages/TDDValidationRequest'
+    publish:
+      summary: Request TDD validation
+      operationId: requestTDDValidation
+      message:
+        $ref: '#/components/messages/TDDValidationRequest'
+
+  tdd/validation/completed:
+    description: Channel for TDD validation results
+    subscribe:
+      summary: Receive TDD validation results
+      operationId: onTDDValidationCompleted
+      message:
+        $ref: '#/components/messages/TDDValidationResult'
+    publish:
+      summary: Publish TDD validation result
+      operationId: publishTDDValidationResult
+      message:
+        $ref: '#/components/messages/TDDValidationResult'
+
+  tdd/violation/detected:
+    description: Channel for TDD violation alerts
+    subscribe:
+      summary: Receive TDD violation alerts
+      operationId: onTDDViolationDetected
+      message:
+        $ref: '#/components/messages/TDDViolationAlert'
+    publish:
+      summary: Alert on TDD violation
+      operationId: alertTDDViolation
+      message:
+        $ref: '#/components/messages/TDDViolationAlert'
+
+  contract/validation/requested:
+    description: Channel for contract validation requests
+    subscribe:
+      summary: Handle contract validation requests
+      operationId: onContractValidationRequested
+      message:
+        $ref: '#/components/messages/ContractValidationRequest'
+    publish:
+      summary: Request contract validation
+      operationId: requestContractValidation
+      message:
+        $ref: '#/components/messages/ContractValidationRequest'
+
+  contract/validation/completed:
+    description: Channel for contract validation results
+    subscribe:
+      summary: Receive contract validation results
+      operationId: onContractValidationCompleted
+      message:
+        $ref: '#/components/messages/ContractValidationResult'
+    publish:
+      summary: Publish contract validation result
+      operationId: publishContractValidationResult
+      message:
+        $ref: '#/components/messages/ContractValidationResult'
+
+  test/coverage/updated:
+    description: Channel for test coverage updates
+    subscribe:
+      summary: Receive test coverage updates
+      operationId: onTestCoverageUpdated
+      message:
+        $ref: '#/components/messages/TestCoverageUpdate'
+    publish:
+      summary: Publish test coverage update
+      operationId: publishTestCoverageUpdate
+      message:
+        $ref: '#/components/messages/TestCoverageUpdate'
+
+  deployment/gated:
+    description: Channel for deployment gate decisions
+    subscribe:
+      summary: Receive deployment gate decisions
+      operationId: onDeploymentGated
+      message:
+        $ref: '#/components/messages/DeploymentGateEvent'
+    publish:
+      summary: Publish deployment gate decision
+      operationId: publishDeploymentGate
+      message:
+        $ref: '#/components/messages/DeploymentGateEvent'
+
+components:
+  messages:
+    AgentCreatedEvent:
+      name: AgentCreatedEvent
+      title: Agent Created Event
+      summary: Emitted when a new agent is created with TDD validation
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/AgentCreatedPayload'
+
+    AgentUpdatedEvent:
+      name: AgentUpdatedEvent
+      title: Agent Updated Event
+      summary: Emitted when an agent is updated
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/AgentUpdatedPayload'
+
+    AgentDeletedEvent:
+      name: AgentDeletedEvent
+      title: Agent Deleted Event
+      summary: Emitted when an agent is deleted
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/AgentDeletedPayload'
+
+    TDDValidationRequest:
+      name: TDDValidationRequest
+      title: TDD Validation Request
+      summary: Request to validate TDD compliance
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/TDDValidationRequestPayload'
+
+    TDDValidationResult:
+      name: TDDValidationResult
+      title: TDD Validation Result
+      summary: Result of TDD compliance validation
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/TDDValidationResultPayload'
+
+    TDDViolationAlert:
+      name: TDDViolationAlert
+      title: TDD Violation Alert
+      summary: Alert for TDD compliance violation
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+        - $ref: '#/components/messageTraits/alertHeaders'
+      payload:
+        $ref: '#/components/schemas/TDDViolationPayload'
+
+    ContractValidationRequest:
+      name: ContractValidationRequest
+      title: Contract Validation Request
+      summary: Request to validate API contract compliance
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/ContractValidationRequestPayload'
+
+    ContractValidationResult:
+      name: ContractValidationResult
+      title: Contract Validation Result
+      summary: Result of contract validation
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/ContractValidationResultPayload'
+
+    TestCoverageUpdate:
+      name: TestCoverageUpdate
+      title: Test Coverage Update
+      summary: Update on test coverage metrics
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+      payload:
+        $ref: '#/components/schemas/TestCoveragePayload'
+
+    DeploymentGateEvent:
+      name: DeploymentGateEvent
+      title: Deployment Gate Event
+      summary: Deployment gate decision based on TDD compliance
+      contentType: application/json
+      traits:
+        - $ref: '#/components/messageTraits/commonHeaders'
+        - $ref: '#/components/messageTraits/deploymentHeaders'
+      payload:
+        $ref: '#/components/schemas/DeploymentGatePayload'
+
+  schemas:
+    AgentCreatedPayload:
+      type: object
+      required:
+        - agentId
+        - name
+        - category
+        - version
+        - tddValidation
+        - timestamp
+      properties:
+        agentId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+          enum: [development, testing, security, infrastructure, documentation]
+        version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+        tddValidation:
+          type: object
+          properties:
+            passed:
+              type: boolean
+            testCoverage:
+              type: number
+            testsWrittenFirst:
+              type: boolean
+        capabilities:
+          type: array
+          items:
+            type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    AgentUpdatedPayload:
+      type: object
+      required:
+        - agentId
+        - changes
+        - timestamp
+      properties:
+        agentId:
+          type: string
+          format: uuid
+        previousVersion:
+          type: string
+        newVersion:
+          type: string
+        changes:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              oldValue:
+                type: string
+              newValue:
+                type: string
+        tddValidation:
+          type: object
+          properties:
+            passed:
+              type: boolean
+            violations:
+              type: array
+              items:
+                type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    AgentDeletedPayload:
+      type: object
+      required:
+        - agentId
+        - reason
+        - timestamp
+      properties:
+        agentId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        reason:
+          type: string
+        deletedBy:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    TDDValidationRequestPayload:
+      type: object
+      required:
+        - validationId
+        - target
+        - requestedBy
+        - timestamp
+      properties:
+        validationId:
+          type: string
+          format: uuid
+        target:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [commit, branch, agent, file]
+            identifier:
+              type: string
+            commitRange:
+              type: object
+              properties:
+                from:
+                  type: string
+                to:
+                  type: string
+        options:
+          type: object
+          properties:
+            strictMode:
+              type: boolean
+            includeMetrics:
+              type: boolean
+            validateContracts:
+              type: boolean
+        requestedBy:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    TDDValidationResultPayload:
+      type: object
+      required:
+        - validationId
+        - passed
+        - violations
+        - metrics
+        - timestamp
+      properties:
+        validationId:
+          type: string
+          format: uuid
+        passed:
+          type: boolean
+        violations:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum:
+                  - NO_TEST
+                  - TEST_AFTER_IMPL
+                  - MOCK_IN_PROD
+                  - LOW_COVERAGE
+                  - NO_CONTRACT
+              severity:
+                type: string
+                enum: [CRITICAL, HIGH, MEDIUM, LOW]
+              file:
+                type: string
+              line:
+                type: integer
+              message:
+                type: string
+              suggestion:
+                type: string
+        metrics:
+          type: object
+          properties:
+            testCoverage:
+              type: number
+            filesAnalyzed:
+              type: integer
+            testsWrittenFirst:
+              type: integer
+            complianceRate:
+              type: number
+            executionTime:
+              type: number
+        timestamp:
+          type: string
+          format: date-time
+
+    TDDViolationPayload:
+      type: object
+      required:
+        - violationId
+        - type
+        - severity
+        - context
+        - timestamp
+      properties:
+        violationId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+            - NO_TEST
+            - TEST_AFTER_IMPL
+            - MOCK_IN_PROD
+            - LOW_COVERAGE
+            - NO_CONTRACT
+            - BYPASS_ATTEMPT
+        severity:
+          type: string
+          enum: [CRITICAL, HIGH, MEDIUM, LOW]
+        context:
+          type: object
+          properties:
+            repository:
+              type: string
+            branch:
+              type: string
+            commit:
+              type: string
+            file:
+              type: string
+            line:
+              type: integer
+            author:
+              type: string
+        description:
+          type: string
+        remediation:
+          type: string
+        blockingDeployment:
+          type: boolean
+        timestamp:
+          type: string
+          format: date-time
+
+    ContractValidationRequestPayload:
+      type: object
+      required:
+        - validationId
+        - contractPath
+        - implementationPath
+        - requestedBy
+        - timestamp
+      properties:
+        validationId:
+          type: string
+          format: uuid
+        contractPath:
+          type: string
+        implementationPath:
+          type: string
+        contractType:
+          type: string
+          enum: [openapi, asyncapi, graphql]
+        requestedBy:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    ContractValidationResultPayload:
+      type: object
+      required:
+        - validationId
+        - valid
+        - issues
+        - timestamp
+      properties:
+        validationId:
+          type: string
+          format: uuid
+        valid:
+          type: boolean
+        contractVersion:
+          type: string
+        implementationVersion:
+          type: string
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum:
+                  - MISSING_ENDPOINT
+                  - TYPE_MISMATCH
+                  - MISSING_FIELD
+                  - EXTRA_FIELD
+                  - VALIDATION_ERROR
+              endpoint:
+                type: string
+              expected:
+                type: string
+              actual:
+                type: string
+              message:
+                type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    TestCoveragePayload:
+      type: object
+      required:
+        - repository
+        - branch
+        - coverage
+        - timestamp
+      properties:
+        repository:
+          type: string
+        branch:
+          type: string
+        commit:
+          type: string
+        coverage:
+          type: object
+          properties:
+            overall:
+              type: number
+            lines:
+              type: number
+            branches:
+              type: number
+            functions:
+              type: number
+            statements:
+              type: number
+        breakdown:
+          type: array
+          items:
+            type: object
+            properties:
+              file:
+                type: string
+              coverage:
+                type: number
+              lines:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                  covered:
+                    type: integer
+        trend:
+          type: string
+          enum: [improving, stable, declining]
+        timestamp:
+          type: string
+          format: date-time
+
+    DeploymentGatePayload:
+      type: object
+      required:
+        - deploymentId
+        - decision
+        - reason
+        - timestamp
+      properties:
+        deploymentId:
+          type: string
+          format: uuid
+        environment:
+          type: string
+          enum: [development, staging, production]
+        decision:
+          type: string
+          enum: [APPROVED, BLOCKED, WARNING]
+        reason:
+          type: string
+        tddCompliance:
+          type: object
+          properties:
+            passed:
+              type: boolean
+            testCoverage:
+              type: number
+            violations:
+              type: integer
+        contractCompliance:
+          type: object
+          properties:
+            valid:
+              type: boolean
+            issues:
+              type: integer
+        overrideAttempted:
+          type: boolean
+        overrideReason:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+  messageTraits:
+    commonHeaders:
+      headers:
+        type: object
+        properties:
+          correlationId:
+            type: string
+            format: uuid
+            description: Correlation ID for tracking
+          messageId:
+            type: string
+            format: uuid
+            description: Unique message identifier
+          timestamp:
+            type: string
+            format: date-time
+            description: Message timestamp
+          source:
+            type: string
+            description: Source service/component
+          version:
+            type: string
+            description: Message version
+
+    alertHeaders:
+      headers:
+        type: object
+        properties:
+          alertLevel:
+            type: string
+            enum: [INFO, WARNING, ERROR, CRITICAL]
+          notificationRequired:
+            type: boolean
+          escalationPath:
+            type: string
+
+    deploymentHeaders:
+      headers:
+        type: object
+        properties:
+          deploymentId:
+            type: string
+          environment:
+            type: string
+          version:
+            type: string
+          rollbackEnabled:
+            type: boolean
+
+  securitySchemes:
+    saslScram:
+      type: scramSha256
+      description: SASL/SCRAM-SHA-256 authentication
+
+  operationTraits:
+    kafka:
+      bindings:
+        kafka:
+          groupId: tdd-enforcement-group
+          clientId: tdd-enforcement-service
