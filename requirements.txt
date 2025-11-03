@@ -1,20 +1,19 @@
-# LangGraph PRP Workflow Requirements
+# LangGraph Learning Journey - Minimal Dependencies
 # Install with: pip install -r requirements.txt
 
-# Core LangGraph and LangChain
-langgraph>=0.2.0
-langchain-anthropic>=0.2.0
-anthropic>=0.40.0
+# Core Framework
+langgraph>=0.2.0           # State machine framework for LLM workflows
 
-# Environment and Configuration
-python-dotenv>=1.0.0
-pyyaml>=6.0.0
+# Claude API
+anthropic>=0.40.0          # Anthropic Claude API client
 
-# Testing Tools (for Gate 2: Coverage)
-pytest>=8.0.0
-pytest-cov>=5.0.0
+# Environment Configuration
+python-dotenv>=1.0.0       # Load .env files
 
-# Optional: Enhanced Features
-jsonschema>=4.0.0          # For PRP schema validation
-black>=24.0.0              # Code formatting
-ruff>=0.6.0                # Fast Python linter
+# Testing (for later lessons)
+pytest>=8.0.0              # Testing framework
+
+# Note: Additional dependencies will be added as we progress through lessons
+# - pytest-cov (Lesson 06: Testing and coverage)
+# - pyyaml (Lesson 07: Configuration management)
+# - jsonschema (Lesson 09: Schema validation)

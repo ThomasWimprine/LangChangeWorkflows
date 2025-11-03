@@ -1,0 +1,570 @@
+---
+openapi: 3.1.0
+info:
+  title: ClaudeAgents API Contract Template
+  version: 1.0.0
+  description: |
+    Contract-first API definition template for ClaudeAgents services.
+    This template enforces TDD principles by requiring API contracts
+    to be defined BEFORE implementation.
+  contact:
+    name: TDD Enforcement Framework
+    email: tdd@claudeagents.dev
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+  - url: https://staging.claudeagents.dev/api/v1
+    description: Staging environment
+  - url: https://api.claudeagents.dev/v1
+    description: Production environment
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+tags:
+  - name: agents
+    description: Agent management operations
+  - name: validation
+    description: TDD validation endpoints
+  - name: contracts
+    description: Contract management
+  - name: health
+    description: Health and status checks
+
+paths:
+  /agents:
+    get:
+      summary: List all agents
+      description: Retrieve a paginated list of all available agents
+      operationId: listAgents
+      tags:
+        - agents
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SortParam'
+        - name: category
+          in: query
+          description: Filter by agent category
+          schema:
+            type: string
+            enum:
+              - development
+              - testing
+              - security
+              - infrastructure
+              - documentation
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+    post:
+      summary: Create new agent
+      description: Create a new agent with TDD validation
+      operationId: createAgent
+      tags:
+        - agents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCreateRequest'
+      responses:
+        '201':
+          description: Agent created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /agents/{agentId}:
+    get:
+      summary: Get agent by ID
+      description: Retrieve detailed information about a specific agent
+      operationId: getAgent
+      tags:
+        - agents
+      parameters:
+        - $ref: '#/components/parameters/AgentId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /tdd/validate:
+    post:
+      summary: Validate TDD compliance
+      description: Check if code follows TDD principles
+      operationId: validateTDD
+      tags:
+        - validation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TDDValidationRequest'
+      responses:
+        '200':
+          description: Validation completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TDDValidationResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /contracts/validate:
+    post:
+      summary: Validate API contract
+      description: Ensure API implementation matches contract
+      operationId: validateContract
+      tags:
+        - contracts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContractValidationRequest'
+      responses:
+        '200':
+          description: Contract validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContractValidationResponse'
+
+  /health:
+    get:
+      summary: Health check
+      description: Check service health and TDD enforcement status
+      operationId: healthCheck
+      tags:
+        - health
+      security: []  # No auth required for health check
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  parameters:
+    AgentId:
+      name: agentId
+      in: path
+      required: true
+      description: Unique agent identifier
+      schema:
+        type: string
+        format: uuid
+        example: 550e8400-e29b-41d4-a716-446655440000
+
+    PageParam:
+      name: page
+      in: query
+      description: Page number for pagination
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    LimitParam:
+      name: limit
+      in: query
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    SortParam:
+      name: sort
+      in: query
+      description: Sort field and order
+      schema:
+        type: string
+        pattern: '^[a-z_]+:(asc|desc)$'
+        example: created_at:desc
+
+  schemas:
+    Agent:
+      type: object
+      required:
+        - id
+        - name
+        - category
+        - version
+        - tddCompliant
+        - testCoverage
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        category:
+          type: string
+          enum: [development, testing, security, infrastructure, documentation]
+        version:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+        description:
+          type: string
+          maxLength: 500
+        tddCompliant:
+          type: boolean
+          description: Whether agent follows TDD principles
+        testCoverage:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+          description: Test coverage percentage
+        capabilities:
+          type: array
+          items:
+            type: string
+        config:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AgentCreateRequest:
+      type: object
+      required:
+        - name
+        - category
+        - testFiles
+        - implementationFiles
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        category:
+          type: string
+          enum: [development, testing, security, infrastructure, documentation]
+        description:
+          type: string
+          maxLength: 500
+        testFiles:
+          type: array
+          description: Test files (must be committed first for TDD)
+          items:
+            type: string
+          minItems: 1
+        implementationFiles:
+          type: array
+          description: Implementation files
+          items:
+            type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+        config:
+          type: object
+          additionalProperties: true
+
+    AgentListResponse:
+      type: object
+      required:
+        - agents
+        - pagination
+      properties:
+        agents:
+          type: array
+          items:
+            $ref: '#/components/schemas/Agent'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    TDDValidationRequest:
+      type: object
+      required:
+        - commitRange
+      properties:
+        commitRange:
+          type: object
+          properties:
+            from:
+              type: string
+              description: Starting commit SHA
+            to:
+              type: string
+              description: Ending commit SHA
+        strictMode:
+          type: boolean
+          default: true
+          description: Enforce strict TDD rules
+
+    TDDValidationResponse:
+      type: object
+      required:
+        - passed
+        - violations
+        - metrics
+      properties:
+        passed:
+          type: boolean
+        violations:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [NO_TEST, TEST_AFTER_IMPL, MOCK_IN_PROD, LOW_COVERAGE]
+              file:
+                type: string
+              line:
+                type: integer
+              message:
+                type: string
+              severity:
+                type: string
+                enum: [CRITICAL, HIGH, MEDIUM, LOW]
+        metrics:
+          type: object
+          properties:
+            testCoverage:
+              type: number
+            testsWrittenFirst:
+              type: integer
+            totalFiles:
+              type: integer
+            complianceRate:
+              type: number
+
+    ContractValidationRequest:
+      type: object
+      required:
+        - contractPath
+        - implementationPath
+      properties:
+        contractPath:
+          type: string
+          description: Path to contract file
+        implementationPath:
+          type: string
+          description: Path to implementation file
+        validationType:
+          type: string
+          enum: [openapi, asyncapi, graphql]
+          default: openapi
+
+    ContractValidationResponse:
+      type: object
+      required:
+        - valid
+        - issues
+      properties:
+        valid:
+          type: boolean
+        contractVersion:
+          type: string
+        implementationVersion:
+          type: string
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              endpoint:
+                type: string
+              issue:
+                type: string
+              suggestion:
+                type: string
+
+    HealthStatus:
+      type: object
+      required:
+        - status
+        - timestamp
+        - tddEnforcement
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+        tddEnforcement:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            lastCheck:
+              type: string
+              format: date-time
+            complianceRate:
+              type: number
+        services:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+              latency:
+                type: integer
+
+    Pagination:
+      type: object
+      required:
+        - page
+        - limit
+        - total
+        - totalPages
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+        hasNext:
+          type: boolean
+        hasPrevious:
+          type: boolean
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+        - timestamp
+      properties:
+        code:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error details
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+          description: Request trace ID for debugging
+
+    ValidationError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            validationErrors:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+                  value:
+                    type: string
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
