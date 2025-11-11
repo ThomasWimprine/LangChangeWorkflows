@@ -106,6 +106,9 @@ class PRPDraftState(TypedDict, total=False):
     status: str  # "initializing", "submitting", "polling", "processing", "followup", "success", "failed"
     error_message: Optional[str]
 
+    compilation_status: Optional[str]
+    draft_phase_complete: Optional[bool]
+    generate_phase_complete: Optional[bool]
 
 # Standalone agent registry
 AGENT_DIRS = [Path(os.path.expanduser("~/.claude/agents"))]
@@ -501,7 +504,7 @@ def _gather_project_context() -> str:
                     file_content = path.read_text(encoding='utf-8', errors='replace')
 
                     # Skip if too large
-                    if len(file_content) > 50000:
+                    if len(file_content) > 100000:
                         logger.debug(f"Skipping large file: {path} ({len(file_content)} chars)")
                         continue
 
@@ -804,6 +807,8 @@ def process_results_node(state: PRPDraftState) -> PRPDraftState:
     raw_dir = PROJECT_ROOT / "prp" / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
 
+    consolidated_data = []
+
     for item in items:
         # Extract custom_id from batch result
         custom_id = None
@@ -942,6 +947,10 @@ def process_results_node(state: PRPDraftState) -> PRPDraftState:
 
         # Extract delegation suggestions
         suggested |= _extract_suggested_agents(data)
+        consolidated_data.append({
+            "agent": agent_tag,
+            "response": data
+        })
 
     logger.info(f"Delegation suggestions: {', '.join(sorted(suggested))}")
 
@@ -975,7 +984,8 @@ def process_results_node(state: PRPDraftState) -> PRPDraftState:
         "tokens_output": total_tokens_out,
         "total_tokens": total_tokens_in + total_tokens_out,
         "cost_usd": total_cost,
-        "status": "processed"
+        "status": "processed",
+        "consolidated_data": consolidated_data
     }
 
 
@@ -1012,6 +1022,30 @@ def prepare_followup_node(state: PRPDraftState) -> PRPDraftState:
         "agents_to_query": list(to_query),
         "pass_number": pass_num + 1,
         "status": "followup_prepared"
+    }
+
+def compile_draft_responses_node(state: PRPDraftState) -> PRPDraftState:
+    """Compile all draft responses into a consolidated file."""
+    draft_files = state.get("draft_files", [])
+    timestamp = state.get("timestamp", "draft")
+    consolidated_data = []
+
+
+    for df in draft_files:
+        with open(df, "r") as f:
+            data = json.load(f)
+            consolidated_data.append(data)
+    
+    # Save the consolidated file
+    if not os.path.exists("prp/active"):
+        os.makedirs("prp/active")
+    with open(f"prp/active/consolidated_draft_responses_{timestamp}.json", "w") as f:
+        json.dump(consolidated_data, f, indent=2)
+
+    return {
+        **state,
+        "compilation_status": "drafts_compiled",
+        "draft_phase_complete": True
     }
 
 
@@ -1122,6 +1156,7 @@ def build_workflow() -> StateGraph:
     workflow.add_node("poll_batch", poll_batch_node)
     workflow.add_node("process_results", process_results_node)
     workflow.add_node("prepare_followup", prepare_followup_node)
+    workflow.add_node("compile_draft_responses", compile_draft_responses_node)
     workflow.add_node("success", success_node)
 
     # Set entry point
@@ -1160,10 +1195,11 @@ def build_workflow() -> StateGraph:
         followup_router,
         {
             "followup": "submit_batch",  # Loop back for another pass
-            "done": "success"
+            "done": "compile_draft_responses"
         }
     )
 
+    workflow.add_edge("compile_draft_responses", "success")
     # Success terminal edge
     workflow.add_edge("success", END)
 

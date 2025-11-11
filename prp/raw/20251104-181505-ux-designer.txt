@@ -1,0 +1,360 @@
+```json
+{
+    "agent": "ux-designer",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature spans multiple learning modules requiring sequential development",
+            "Involves creating 10+ separate lesson implementations with distinct objectives",
+            "Requires documentation, examples, and testing infrastructure across different components",
+            "Educational content creation and technical implementation are separate concerns"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "001",
+            "agent": "documentation-writer",
+            "objective": "Create comprehensive learning guide structure and lesson planning framework",
+            "affected_components": [
+                "docs/LEARNING_GUIDE.md"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Learning guide contains all 10 lesson outlines with objectives",
+                "Each lesson has clear prerequisites and learning outcomes defined",
+                "Progression path from basics to production is documented",
+                "Success criteria for each lesson is measurable"
+            ],
+            "risk": [
+                "Scope creep if lesson objectives are not clearly bounded"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "002",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 01 'Hello LangGraph' with simplest 2-node workflow",
+            "affected_components": [
+                "lessons/01-hello-langgraph/hello.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Workflow has exactly 2 nodes (greet and farewell)",
+                "State flows automatically between nodes",
+                "Example runs successfully with clear output",
+                "Code includes inline comments explaining LangGraph concepts",
+                "README.md in lesson folder explains what was learned"
+            ],
+            "risk": [
+                "Over-complication if adding features beyond basic state flow"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "003",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 02 state management with TypedDict schemas",
+            "affected_components": [
+                "lessons/02-state-management/state_demo.py"
+            ],
+            "dependencies": [
+                "001"
+            ],
+            "acceptance": [
+                "PRPState TypedDict schema defined with all required fields",
+                "Demonstration shows state persistence across nodes",
+                "Example includes state validation and type checking",
+                "Code demonstrates state updates and immutability patterns",
+                "Tests verify state schema enforcement"
+            ],
+            "risk": [
+                "Complexity if including too many state fields initially"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "004",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 03 conditional routing with decision logic",
+            "affected_components": [
+                "lessons/03-conditional-routing/routing_demo.py"
+            ],
+            "dependencies": [
+                "002"
+            ],
+            "acceptance": [
+                "Conditional edges implemented based on state values",
+                "Example shows success/failure/retry routing patterns",
+                "Routing function is pure and deterministic",
+                "Visual diagram shows routing logic flow",
+                "Tests cover all routing branches"
+            ],
+            "risk": [
+                "Logic complexity if routing conditions are not clearly defined"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "005",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 04 retry patterns with 3-strike rule and circuit breaker",
+            "affected_components": [
+                "lessons/04-retry-patterns/retry_demo.py"
+            ],
+            "dependencies": [
+                "003"
+            ],
+            "acceptance": [
+                "3-strike retry logic implemented with state tracking",
+                "Circuit breaker activates after 15 consecutive failures",
+                "Failure history maintained in state",
+                "Example demonstrates retry with exponential backoff",
+                "Tests verify retry limits and circuit breaker activation"
+            ],
+            "risk": [
+                "Edge cases in failure counting and state reset logic"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "006",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 05 Claude API integration from workflow nodes",
+            "affected_components": [
+                "lessons/05-claude-api/api_demo.py"
+            ],
+            "dependencies": [
+                "001"
+            ],
+            "acceptance": [
+                "Node successfully calls Anthropic API with streaming",
+                "API response integrated into workflow state",
+                "Error handling for API failures implemented",
+                "Cost tracking added for API calls",
+                "Example includes prompt caching demonstration"
+            ],
+            "risk": [
+                "API rate limiting or authentication issues during testing"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "007",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 06 multi-node workflow with sequential gates",
+            "affected_components": [
+                "lessons/06-multi-node/gates_demo.py"
+            ],
+            "dependencies": [
+                "004",
+                "005"
+            ],
+            "acceptance": [
+                "3+ validation gates implemented in sequence",
+                "Each gate has pass/fail logic with state updates",
+                "Workflow demonstrates gate coordination",
+                "State tracks which gates passed/failed",
+                "Example shows full gate execution flow"
+            ],
+            "risk": [
+                "Coordination complexity between multiple gates"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "008",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 07 cost optimization with context caching",
+            "affected_components": [
+                "lessons/07-cost-optimization/caching_demo.py"
+            ],
+            "dependencies": [
+                "006"
+            ],
+            "acceptance": [
+                "Prompt caching implemented using Anthropic cache_control",
+                "Cost comparison shows 40%+ savings on retries",
+                "Cache hit/miss tracking in state",
+                "Example demonstrates cached vs uncached calls",
+                "Documentation explains caching strategies"
+            ],
+            "risk": [
+                "Cache invalidation logic complexity"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "009",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 08 multi-agent coordination with specialist consultation",
+            "affected_components": [
+                "lessons/08-multi-agent/agent_coordination_demo.py"
+            ],
+            "dependencies": [
+                "005",
+                "007"
+            ],
+            "acceptance": [
+                "AgentCoordinator class implemented with agent registry",
+                "Specialist consultation triggered after 3 gate failures",
+                "Agent responses integrated into workflow state",
+                "Example shows panel of agents providing recommendations",
+                "Tests verify agent selection and response handling"
+            ],
+            "risk": [
+                "Agent coordination timing and response aggregation complexity"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "010",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 09 complete PRP workflow with all gates integrated",
+            "affected_components": [
+                "lessons/09-complete-prp/full_workflow.py"
+            ],
+            "dependencies": [
+                "007",
+                "008",
+                "009"
+            ],
+            "acceptance": [
+                "All 6 validation gates implemented and tested",
+                "Complete state management with checkpointing",
+                "Cost tracking and optimization fully integrated",
+                "Multi-agent coordination functional",
+                "End-to-end workflow runs successfully on real PRP"
+            ],
+            "risk": [
+                "Integration complexity across all previous lessons",
+                "Performance issues with full workflow execution"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "011",
+            "agent": "devops-engineer",
+            "objective": "Implement Lesson 10 production deployment with monitoring and logging",
+            "affected_components": [
+                "lessons/10-production/deployment_guide.md",
+                "lessons/10-production/monitoring.py"
+            ],
+            "dependencies": [
+                "010"
+            ],
+            "acceptance": [
+                "Deployment guide covers installation and configuration",
+                "Logging implemented at all workflow stages",
+                "Monitoring dashboards for cost and performance",
+                "Error alerting and recovery procedures documented",
+                "Production checklist includes all security requirements"
+            ],
+            "risk": [
+                "Environment-specific deployment issues"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "012",
+            "agent": "test-automation",
+            "objective": "Create comprehensive test suite for all lessons with 100% coverage",
+            "affected_components": [
+                "tests/lessons/"
+            ],
+            "dependencies": [
+                "010"
+            ],
+            "acceptance": [
+                "Unit tests for each lesson with 100% line coverage",
+                "Integration tests for multi-node workflows",
+                "Mock API responses for consistent testing",
+                "Performance benchmarks for workflow execution",
+                "CI/CD pipeline runs all tests automatically"
+            ],
+            "risk": [
+                "Test maintenance burden as lessons evolve"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "013",
+            "agent": "documentation-writer",
+            "objective": "Create interactive walkthrough and troubleshooting guide",
+            "affected_components": [
+                "examples/learning/interactive_walkthrough.py",
+                "docs/TROUBLESHOOTING.md"
+            ],
+            "dependencies": [
+                "010"
+            ],
+            "acceptance": [
+                "Interactive CLI guides user through each lesson",
+                "Troubleshooting guide covers common errors and solutions",
+                "FAQ section addresses learning challenges",
+                "Examples directory has working code for each lesson",
+                "Documentation includes visual diagrams of workflows"
+            ],
+            "risk": [
+                "Documentation drift as code evolves"
+            ],
+            "effort": "M"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "Documentation and planning foundation (TASK 001)"
+        },
+        {
+            "t-002-006": "Core LangGraph concepts lessons (TASKS 002-006) - Sequential learning path"
+        },
+        {
+            "t-007-009": "Advanced workflow features (TASKS 007-009) - Build on core concepts"
+        },
+        {
+            "t-010-011": "Production implementation (TASKS 010-011) - Full integration"
+        },
+        {
+            "t-012-013": "Quality assurance and support materials (TASKS 012-013)"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "python-developer": "Primary implementer for all lesson code (TASKS 002-010)"
+        },
+        {
+            "documentation-writer": "Learning materials and guides (TASKS 001, 013)"
+        },
+        {
+            "test-automation": "Test infrastructure and coverage (TASK 012)"
+        },
+        {
+            "devops-engineer": "Production deployment and monitoring (TASK 011)"
+        },
+        {
+            "architect-reviewer": "Review workflow architecture and design patterns before TASK 007"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "product-manager",
+            "question": "What is the target audience skill level (beginner Python, intermediate LangGraph, etc.)?"
+        },
+        {
+            "agent": "product-manager",
+            "question": "Should lessons include video walkthroughs or only written documentation?"
+        },
+        {
+            "agent": "security-reviewer",
+            "question": "Are there security requirements for API key management in lesson examples?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "Should each lesson be runnable independently or require previous lessons?"
+        },
+        {
+            "agent": "test-automation",
+            "question": "What is the acceptable test execution time for the full lesson test suite?"
+        }
+    ]
+}
+```

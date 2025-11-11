@@ -1,0 +1,385 @@
+```json
+{
+    "agent": "compliance-officer",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature spans multiple distinct domains: LangGraph workflow implementation, state management, gate validation logic, agent coordination, and cost tracking",
+            "Requires coordination across 15+ components (workflow engine, state schemas, gate validators, agent coordinator, context optimizer, etc.)",
+            "Contains complex dependencies between workflow orchestration, validation gates, retry logic, and specialist consultation",
+            "Involves multiple programming languages and frameworks (Python, LangGraph, pytest, mutation testing tools)",
+            "Requires both implementation and learning documentation tasks that should be separated"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "T-001",
+            "agent": "python-developer",
+            "objective": "Implement PRPState TypedDict schema with all required fields for workflow state management",
+            "affected_components": [
+                "prp_langgraph/schemas/prp_state.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "PRPState TypedDict defined with all 20+ fields from specification",
+                "Type hints correctly specified for all fields (str, List, Dict, int, float, bool)",
+                "Validation helper functions included for state transitions",
+                "100% test coverage with unit tests for state validation",
+                "Documentation includes field descriptions and usage examples"
+            ],
+            "risk": [
+                "Schema changes may require updates across multiple workflow nodes"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "T-002",
+            "agent": "python-developer",
+            "objective": "Implement ValidationResult TypedDict schema for gate validation responses",
+            "affected_components": [
+                "prp_langgraph/schemas/prp_state.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "ValidationResult TypedDict with gate_id, passed, message, details, cost, tokens_used fields",
+                "Type validation for all fields with appropriate types",
+                "Helper function to create ValidationResult from gate outputs",
+                "100% test coverage including edge cases",
+                "Integration with PRPState.current_validation_result field verified"
+            ],
+            "risk": [
+                "Schema must align with all gate implementations"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "T-003",
+            "agent": "python-developer",
+            "objective": "Create BasePRPWorkflow class with StateGraph initialization and node registration",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "BasePRPWorkflow class with __init__ method initializing StateGraph",
+                "Node registration methods (add_node, add_edge, add_conditional_edges)",
+                "Configuration loading from gates.yaml",
+                "Workflow compilation method returning executable app",
+                "100% test coverage with mock StateGraph"
+            ],
+            "risk": [
+                "LangGraph API changes may require workflow adjustments"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "T-004",
+            "agent": "python-developer",
+            "objective": "Implement initialize_workflow node for workflow setup and state initialization",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "initialize_workflow method generates unique workflow_id",
+                "Initializes cost_tracking, api_calls, cache_hits to zero",
+                "Sets up context_optimizer and agent_coordinator instances",
+                "Loads PRP file content and validates format",
+                "100% test coverage including error cases"
+            ],
+            "risk": [
+                "PRP file format must be strictly validated"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "T-005",
+            "agent": "python-developer",
+            "objective": "Implement Gate 2 coverage validation node with pytest integration",
+            "affected_components": [
+                "prp_langgraph/gates/gate2_coverage.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "validate_coverage_gate function executes pytest with coverage",
+                "Parses coverage.json and validates >= 100% threshold",
+                "Returns ValidationResult with pass/fail, message, cost tracking",
+                "Handles pytest execution errors gracefully",
+                "100% test coverage with mocked pytest subprocess calls"
+            ],
+            "risk": [
+                "pytest coverage plugin must be installed and configured"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "T-006",
+            "agent": "python-developer",
+            "objective": "Implement route_gate_result conditional edge function for workflow routing",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "route_gate_result checks current_validation_result.passed field",
+                "Returns 'success' if passed, 'retry' if failed and retries < 3",
+                "Returns 'circuit_breaker' if consecutive_failures >= 15",
+                "Properly handles missing validation result gracefully",
+                "100% test coverage with all routing paths tested"
+            ],
+            "risk": [
+                "Routing logic must align with retry and circuit breaker requirements"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "T-007",
+            "agent": "python-developer",
+            "objective": "Implement handle_failure node with 3-strike retry logic and specialist consultation",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Increments gates_failed counter for current gate",
+                "Increments consecutive_failures counter",
+                "Triggers specialist consultation after 3 failures for same gate",
+                "Activates circuit breaker if consecutive_failures >= 15",
+                "100% test coverage including specialist consultation path"
+            ],
+            "risk": [
+                "Specialist consultation may introduce significant latency"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "T-008",
+            "agent": "python-developer",
+            "objective": "Implement ContextOptimizer class for prompt caching and cost reduction",
+            "affected_components": [
+                "prp_langgraph/optimization/context_optimizer.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "ContextOptimizer caches agent system prompts using Anthropic's cache API",
+                "Tracks cache hits and misses in state",
+                "Calculates cost savings from cached vs non-cached calls",
+                "Provides cache statistics and optimization metrics",
+                "100% test coverage with mocked Anthropic API calls"
+            ],
+            "risk": [
+                "Cache invalidation strategy must be carefully designed"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "T-009",
+            "agent": "python-developer",
+            "objective": "Implement AgentCoordinator class for multi-agent specialist consultation",
+            "affected_components": [
+                "prp_langgraph/coordination/agent_coordinator.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "AgentCoordinator.consult_specialist calls appropriate specialist agent",
+                "Maps gate_id to specialist agent (e.g., gate_2_coverage -> test-automation)",
+                "Passes context and failure history to specialist",
+                "Returns specialist recommendations as structured data",
+                "100% test coverage with mocked agent Task tool calls"
+            ],
+            "risk": [
+                "Specialist agents must be available and properly configured"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "T-010",
+            "agent": "python-developer",
+            "objective": "Implement workflow checkpointing for resumability after failures",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Workflow state automatically saved to checkpoint after each node",
+                "resume() method loads checkpoint by workflow_id and continues execution",
+                "Checkpoint storage supports multiple concurrent workflows",
+                "Checkpoint cleanup after successful completion",
+                "100% test coverage including resume from various checkpoints"
+            ],
+            "risk": [
+                "Checkpoint storage must handle concurrent access safely"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "T-011",
+            "agent": "python-developer",
+            "objective": "Create auto_detect_runner.py for automatic project detection and workflow execution",
+            "affected_components": [
+                "examples/auto_detect_runner.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Detects project type (Python, Go, Node.js) from files and structure",
+                "Loads appropriate gate configuration for detected project type",
+                "Executes workflow with project-specific settings",
+                "Handles missing PRP file gracefully with clear error message",
+                "100% test coverage with mocked file system operations"
+            ],
+            "risk": [
+                "Project detection heuristics may fail for unconventional structures"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "T-012",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 01 tutorial for basic LangGraph workflow with 2-node greet/farewell example",
+            "affected_components": [
+                "lessons/01-hello-langgraph/README.md"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Lesson includes concept explanation, why it matters, hands-on implementation",
+                "Working code example with greet and farewell nodes",
+                "Test verification steps with expected output",
+                "Optional extension challenges for experimentation",
+                "Key takeaways section summarizing learned concepts"
+            ],
+            "risk": [
+                "Tutorial must remain accurate as LangGraph API evolves"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "T-013",
+            "agent": "documentation-writer",
+            "objective": "Create POC_COMPARISON.md showing side-by-side comparison of POC scripts vs LangGraph",
+            "affected_components": [
+                "docs/POC_COMPARISON.md"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Documents batch submission comparison (draft-001.py vs LangGraph)",
+                "Shows retry logic comparison (draft-004.py vs LangGraph)",
+                "Includes cost analysis with specific dollar amounts",
+                "Demonstrates code complexity reduction metrics (50% reduction)",
+                "Provides migration path from POC scripts to LangGraph"
+            ],
+            "risk": [
+                "Cost estimates must be verified against actual Anthropic API pricing"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "T-014",
+            "agent": "documentation-writer",
+            "objective": "Create architecture_diagrams.md with visual workflow representations",
+            "affected_components": [
+                "docs/architecture_diagrams.md"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Overall state flow diagram showing node progression",
+                "State object evolution showing changes through workflow",
+                "Node execution detail diagram for single node internals",
+                "Context optimization diagram showing cache savings",
+                "Failure handling and circuit breaker flow diagram"
+            ],
+            "risk": [
+                "ASCII diagrams may not render properly in all markdown viewers"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "T-015",
+            "agent": "test-automation",
+            "objective": "Create integration test suite for complete workflow execution end-to-end",
+            "affected_components": [
+                "tests/integration/test_workflow_execution.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Test successful workflow execution with all gates passing",
+                "Test retry logic with gates failing then passing on retry",
+                "Test specialist consultation after 3 failures",
+                "Test circuit breaker activation after 15 consecutive failures",
+                "Test checkpoint resume after workflow interruption"
+            ],
+            "risk": [
+                "Integration tests may be slow and require careful test data setup"
+            ],
+            "effort": "L"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "T-001 through T-002": "State schema foundation - implement TypedDict schemas first as they have no dependencies"
+        },
+        {
+            "T-003 through T-004": "Workflow infrastructure - create base workflow class and initialization"
+        },
+        {
+            "T-005": "First gate implementation - prove the concept with coverage validation"
+        },
+        {
+            "T-006 through T-007": "Routing and retry logic - implement conditional edges and failure handling"
+        },
+        {
+            "T-008 through T-009": "Optimization and coordination - add cost optimization and agent coordination"
+        },
+        {
+            "T-010": "Checkpointing - add resumability after core workflow proven"
+        },
+        {
+            "T-011": "User experience - create auto-detection runner for easy usage"
+        },
+        {
+            "T-012 through T-014": "Documentation - create learning materials and architecture docs"
+        },
+        {
+            "T-015": "Integration testing - validate complete workflow end-to-end"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "python-developer": "All implementation tasks (T-001 through T-011) require Python expertise with LangGraph, pytest, and Anthropic API"
+        },
+        {
+            "documentation-writer": "All documentation tasks (T-012 through T-014) require technical writing expertise"
+        },
+        {
+            "test-automation": "Integration testing task (T-015) requires test automation and workflow validation expertise"
+        },
+        {
+            "architect-reviewer": "Review overall task decomposition for architectural soundness and identify any missing components"
+        },
+        {
+            "security-reviewer": "Review ContextOptimizer and AgentCoordinator for secure API key handling and prompt injection risks"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "python-developer",
+            "question": "Should PRPState include version field for schema evolution and migration support?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "What checkpoint storage backend should be used (file system, Redis, database)?"
+        },
+        {
+            "agent": "security-reviewer",
+            "question": "How should API keys be securely managed in ContextOptimizer and AgentCoordinator?"
+        },
+        {
+            "agent": "architect-reviewer",
+            "question": "Should the workflow support parallel gate execution or must gates be strictly sequential?"
+        },
+        {
+            "agent": "test-automation",
+            "question": "What is the acceptable execution time threshold for integration tests (considering potential API calls)?"
+        }
+    ]
+}
+```

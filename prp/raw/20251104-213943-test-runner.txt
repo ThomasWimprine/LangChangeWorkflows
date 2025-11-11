@@ -1,0 +1,288 @@
+```json
+{
+    "agent": "test-runner",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature spans multiple distinct workflows (draft-prp, execute-prp)",
+            "Involves 6+ validation gates requiring separate implementations",
+            "Requires coordination across multiple specialized agents",
+            "Spans infrastructure setup, workflow design, and validation logic"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "001",
+            "agent": "python-developer",
+            "objective": "Create base LangGraph workflow structure with state management schema",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py",
+                "prp_langgraph/schemas/prp_state.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "StateGraph instantiated with PRPState TypedDict schema",
+                "State includes workflow_id, gates_passed, gates_failed, cost_tracking fields",
+                "Workflow compiles without errors",
+                "Unit tests verify state initialization and transitions",
+                "100% test coverage on state schema validation"
+            ],
+            "risk": [
+                "State schema may need iteration as gates are implemented"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "002",
+            "agent": "python-developer",
+            "objective": "Implement Gate 2 (Coverage) validation node with 100% threshold check",
+            "affected_components": [
+                "prp_langgraph/gates/gate2_coverage.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Node executes pytest --cov and parses coverage.json",
+                "Returns ValidationResult with passed=True only if coverage >= 100%",
+                "Tracks API costs in result metadata",
+                "Unit tests mock pytest execution and verify threshold logic",
+                "Integration test validates real coverage report parsing"
+            ],
+            "risk": [
+                "Coverage report format varies across pytest versions"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "003",
+            "agent": "python-developer",
+            "objective": "Implement conditional routing logic for gate success/failure/retry",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Conditional edge routes to 'success' when gate passes",
+                "Routes to 'handle_failure' when gate fails and retry_count < 3",
+                "Routes to 'circuit_breaker' when consecutive_failures >= 15",
+                "Unit tests verify all routing paths",
+                "State correctly updated for each routing decision"
+            ],
+            "risk": [
+                "Edge case handling for concurrent gate failures"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "004",
+            "agent": "python-developer",
+            "objective": "Implement retry handler with 3-strike rule and specialist consultation",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Retry counter increments on gate failure up to 3 attempts",
+                "After 3rd failure, specialist agent consulted automatically",
+                "Consecutive failures tracked across all gates",
+                "State includes failure_history with timestamps and messages",
+                "Unit tests verify retry limits and specialist invocation"
+            ],
+            "risk": [
+                "Specialist agent coordination adds latency"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "005",
+            "agent": "python-developer",
+            "objective": "Implement context caching optimizer for 40% cost reduction",
+            "affected_components": [
+                "prp_langgraph/optimization/context_optimizer.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Agent prompts cached using Anthropic cache headers",
+                "Cache hits logged and tracked in state['cache_hits']",
+                "Cost calculation includes cache savings breakdown",
+                "Unit tests verify cache header generation",
+                "Integration test measures actual cost reduction on retry"
+            ],
+            "risk": [
+                "Cache TTL expiration mid-workflow"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "006",
+            "agent": "python-developer",
+            "objective": "Implement circuit breaker node to halt after 15 consecutive failures",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Circuit breaker activates when consecutive_failures >= 15",
+                "Workflow terminates with status='circuit_breaker_triggered'",
+                "State includes detailed failure summary and affected gates",
+                "Unit tests verify threshold enforcement",
+                "Integration test simulates 15 failures and verifies halt"
+            ],
+            "risk": [
+                "False positives if transient infrastructure issues"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "007",
+            "agent": "python-developer",
+            "objective": "Implement checkpointing for workflow resumability",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "State checkpointed after each gate execution",
+                "Workflow can resume from last checkpoint using workflow_id",
+                "Checkpoint includes full state and timestamp metadata",
+                "Unit tests verify checkpoint serialization/deserialization",
+                "Integration test resumes mid-workflow successfully"
+            ],
+            "risk": [
+                "Checkpoint storage I/O adds latency"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "008",
+            "agent": "python-developer",
+            "objective": "Create cost tracking aggregator with detailed breakdown reporting",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "State['cost_tracking'] includes per-gate costs and totals",
+                "Tracks API calls, cache hits, and tokens used",
+                "Final report includes savings from caching and retries",
+                "Unit tests verify cost calculation accuracy",
+                "Integration test validates end-to-end cost tracking"
+            ],
+            "risk": [
+                "API pricing changes invalidate calculations"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "009",
+            "agent": "test-automation",
+            "objective": "Create integration test suite for full workflow execution",
+            "affected_components": [
+                "tests/integration/test_full_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Test executes complete workflow from init to success",
+                "Test simulates gate failures and verifies retry logic",
+                "Test validates circuit breaker activation at threshold",
+                "Test verifies cost tracking and caching behavior",
+                "All tests pass with 100% coverage on workflow paths"
+            ],
+            "risk": [
+                "Integration tests may be slow due to real API calls"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "010",
+            "agent": "documentation-writer",
+            "objective": "Create architecture documentation with visual flowcharts and state diagrams",
+            "affected_components": [
+                "docs/architecture_diagrams.md"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Document includes state flow diagram showing all transitions",
+                "Includes retry logic flowchart with 3-strike visualization",
+                "Includes cost optimization explanation with before/after comparison",
+                "Includes circuit breaker decision tree",
+                "Mermaid diagrams render correctly in markdown viewers"
+            ],
+            "risk": [
+                "Documentation may lag behind implementation changes"
+            ],
+            "effort": "S"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "Base infrastructure: StateGraph setup, schema definition, workflow compilation"
+        },
+        {
+            "t-002": "Gate implementation: Coverage validation logic, pytest integration, threshold enforcement"
+        },
+        {
+            "t-003": "Routing logic: Conditional edges, success/failure/retry paths"
+        },
+        {
+            "t-004": "Retry handling: 3-strike rule, specialist consultation, failure tracking"
+        },
+        {
+            "t-005": "Cost optimization: Context caching, cache hit tracking, savings calculation"
+        },
+        {
+            "t-006": "Safety mechanisms: Circuit breaker, consecutive failure threshold"
+        },
+        {
+            "t-007": "Persistence: Checkpointing, resumability, state serialization"
+        },
+        {
+            "t-008": "Monitoring: Cost tracking, API call metrics, performance reporting"
+        },
+        {
+            "t-009": "Quality assurance: Integration tests, workflow validation, coverage verification"
+        },
+        {
+            "t-010": "Knowledge transfer: Architecture docs, visual diagrams, usage examples"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "python-developer": "Tasks 001-008: Core workflow implementation, state management, gates, optimization"
+        },
+        {
+            "test-automation": "Task 009: Integration test suite, workflow validation, coverage verification"
+        },
+        {
+            "documentation-writer": "Task 010: Architecture documentation, visual diagrams, usage guides"
+        },
+        {
+            "architect-reviewer": "Review state schema design and workflow routing architecture before implementation"
+        },
+        {
+            "security-reviewer": "Review checkpoint serialization and state persistence security"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "architect-reviewer",
+            "question": "Should StateGraph use MemorySaver or custom checkpointer for production deployment?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "What is the expected PRP file format (markdown, JSON, YAML) for parsing?"
+        },
+        {
+            "agent": "test-automation",
+            "question": "Should integration tests use mocked Anthropic API or real calls with test credits?"
+        },
+        {
+            "agent": "security-reviewer",
+            "question": "Are there sensitive data fields in state that require encryption at rest?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "What is the maximum workflow runtime before automatic timeout/cleanup?"
+        }
+    ]
+}
+```

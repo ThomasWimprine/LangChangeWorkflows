@@ -1,0 +1,66 @@
+{
+    "task": "P-###-T-###",
+    "atomicity": {
+        "is_atomic": true|false,
+        "depends_on": [
+            "P-###-T-###",
+            "..."
+        ]
+    },
+    "delegated_to": "<agent-name>",
+    "objective": "<...>",
+    "affected_components": [
+        "<component-1>",
+        "<component-2>",
+        "..."
+    ],
+    "success_criteria": [
+        "<criteria-1>",
+        "<criteria-2>",
+        "..."
+    ], // 3 to 5 measurable criteria
+    "validation_tests": [
+        {
+            "id": "VT-###",
+            "description": "<test description>",
+            "expected_result": "<expected result>"
+        },
+        {
+            "id": "VT-###",
+            "description": "<test description>",
+            "expected_result": "<expected result>"
+        },
+        {
+            "..."
+        }, // 3 to 5 tests to validate success
+    ],
+    "supporting_user_stories": [
+        {
+            "id": "US-###",
+            "description": "<user story description>"
+        },
+        {
+            "id": "US-###",
+            "description": "<user story description>"
+        },
+        {
+            "..."
+        } // 2 to 4 user stories
+    ],
+    "effort": {
+        "estimated_hours": <number>,
+        "complexity": "low|medium|high"
+    },
+    "notes": "<additional notes or considerations>",
+    "questions": [
+        {
+            "id": "P-###-T-###-Q-###",
+            "question": "<specific question>",
+            "agent": "<agent-name>", // HUMAN or specific agent
+            "additional_context": "<context to help answer the question>"
+        }
+    ] // list of questions to clarify task details
+},
+{
+    "..."
+}

@@ -1,0 +1,470 @@
+```json
+{
+    "agent": "documentation-writer",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature spans multiple complex systems: LangGraph workflow engine, state management, gate validation, agent coordination, and cost optimization",
+            "Requires coordination across 6+ specialized domains: workflow orchestration, Python development, testing, DevOps, documentation, and architecture",
+            "Contains 10 distinct learning lessons that each represent separate implementation phases",
+            "Involves both learning documentation AND production system implementation",
+            "Multiple integration points between components requiring careful sequencing"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "t-001",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 01 tutorial with working hello-world LangGraph workflow",
+            "affected_components": [
+                "lessons/01-hello-langgraph/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tutorial markdown file exists with concept explanation",
+                "Working 2-node workflow (greet → farewell) executes successfully",
+                "Example code runs without errors",
+                "Documentation explains StateGraph, nodes, and edges clearly",
+                "Includes 'what you learned' reflection section"
+            ],
+            "risk": [
+                "Tutorial may be too simple or too complex for target audience"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "t-002",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 02 tutorial demonstrating TypedDict state schemas",
+            "affected_components": [
+                "lessons/02-state-management/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tutorial explains PRPState schema structure",
+                "Working example with complex state (gates_passed, cost_tracking)",
+                "Code demonstrates state updates across nodes",
+                "Documentation covers state immutability concepts",
+                "Includes comparison with POC file-based approach"
+            ],
+            "risk": [
+                "State schema complexity may confuse learners"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-003",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 03 tutorial on conditional routing with practical examples",
+            "affected_components": [
+                "lessons/03-conditional-routing/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tutorial explains route_gate_result pattern",
+                "Working example with success/retry/circuit-breaker paths",
+                "Code shows lambda-based routing logic",
+                "Documentation covers edge types (simple vs conditional)",
+                "Includes visual diagram of routing flow"
+            ],
+            "risk": [
+                "Conditional logic examples may be too abstract"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-004",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 04 tutorial implementing 3-strike retry pattern",
+            "affected_components": [
+                "lessons/04-retry-patterns/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tutorial explains retry logic and circuit breaker",
+                "Working handle_failure node implementation",
+                "Code demonstrates retry count tracking in state",
+                "Documentation covers specialist consultation after 3 strikes",
+                "Includes cost comparison with/without retries"
+            ],
+            "risk": [
+                "Retry logic may be difficult to test interactively"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-005",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 05 tutorial integrating Claude API calls",
+            "affected_components": [
+                "lessons/05-claude-api/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tutorial shows anthropic client setup",
+                "Working example calling Claude from node",
+                "Code demonstrates message batching",
+                "Documentation covers API key management",
+                "Includes error handling for API failures"
+            ],
+            "risk": [
+                "API rate limits may affect tutorial execution"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-006",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 06 tutorial building multi-gate validation workflow",
+            "affected_components": [
+                "lessons/06-multi-node/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tutorial connects 3+ validation gates sequentially",
+                "Working workflow with gate_2_coverage and gate_3_mock",
+                "Code shows state flowing through multiple nodes",
+                "Documentation explains gate composition patterns",
+                "Includes troubleshooting section for common issues"
+            ],
+            "risk": [
+                "Multi-node complexity may overwhelm learners"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "t-007",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 07 tutorial implementing context caching optimization",
+            "affected_components": [
+                "lessons/07-cost-optimization/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tutorial explains context_optimizer usage",
+                "Working example showing 40% cost reduction",
+                "Code demonstrates cache hit tracking",
+                "Documentation includes cost calculation examples",
+                "Includes comparison table: POC vs LangGraph costs"
+            ],
+            "risk": [
+                "Cost calculations may vary with API pricing changes"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-008",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 08 tutorial on multi-agent specialist coordination",
+            "affected_components": [
+                "lessons/08-multi-agent/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tutorial shows agent_coordinator setup",
+                "Working example consulting test-automation specialist",
+                "Code demonstrates specialist recommendation integration",
+                "Documentation explains agent selection logic",
+                "Includes agent registry reference"
+            ],
+            "risk": [
+                "Agent coordination may require external dependencies"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-009",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 09 tutorial implementing complete 6-gate PRP workflow",
+            "affected_components": [
+                "lessons/09-complete-prp/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tutorial combines all previous lessons",
+                "Working full workflow with all 6 gates",
+                "Code includes TDD, coverage, mock, mutation, security, production-ready gates",
+                "Documentation maps to POC scripts functionality",
+                "Includes end-to-end testing instructions"
+            ],
+            "risk": [
+                "Full workflow may expose integration issues between lessons"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "t-010",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 10 tutorial on production deployment and CI/CD integration",
+            "affected_components": [
+                "lessons/10-production/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tutorial covers deployment to ~/.claude/langgraph/",
+                "Working GitHub Actions workflow example",
+                "Code shows checkpointing and state persistence",
+                "Documentation includes monitoring and observability setup",
+                "Includes rollback and disaster recovery procedures"
+            ],
+            "risk": [
+                "Production setup may require specific infrastructure"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "t-011",
+            "agent": "python-developer",
+            "objective": "Implement PRPState TypedDict schema with all required fields",
+            "affected_components": [
+                "prp_langgraph/schemas/prp_state.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "PRPState class defined with TypedDict inheritance",
+                "All 15+ state fields properly typed (gates_passed, gates_failed, cost_tracking, etc)",
+                "ValidationResult TypedDict defined for gate responses",
+                "Unit tests verify schema structure",
+                "Documentation strings explain each field's purpose"
+            ],
+            "risk": [
+                "Schema changes may break existing workflow code"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "t-012",
+            "agent": "python-developer",
+            "objective": "Implement BasePRPWorkflow class with StateGraph initialization",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "BasePRPWorkflow class with __init__ accepting config",
+                "StateGraph initialized with PRPState schema",
+                "add_node and add_edge methods functional",
+                "compile() returns executable workflow",
+                "Basic workflow (2 nodes) executes successfully"
+            ],
+            "risk": [
+                "LangGraph API changes may affect implementation"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-013",
+            "agent": "python-developer",
+            "objective": "Implement gate_2_coverage validation node with pytest integration",
+            "affected_components": [
+                "prp_langgraph/gates/gate2_coverage.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "validate_coverage_gate function accepts state and config",
+                "Executes pytest --cov command and parses JSON output",
+                "Returns ValidationResult with passed/failed status",
+                "Handles missing coverage.json gracefully",
+                "Unit tests mock pytest execution"
+            ],
+            "risk": [
+                "pytest output format changes may break parsing"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-014",
+            "agent": "python-developer",
+            "objective": "Implement handle_failure node with 3-strike retry logic",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "handle_failure method increments retry counter in state",
+                "Implements 3-strike rule: retry <= 2, specialist at 3",
+                "Updates consecutive_failures counter",
+                "Circuit breaker activates at 15 consecutive failures",
+                "Unit tests verify all retry scenarios"
+            ],
+            "risk": [
+                "Race conditions in retry counter updates"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-015",
+            "agent": "python-developer",
+            "objective": "Implement ContextOptimizer class for prompt caching",
+            "affected_components": [
+                "prp_langgraph/utils/context_optimizer.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "ContextOptimizer caches system prompts by hash",
+                "optimize_context method returns cache_hit boolean",
+                "Tracks cache_hits counter in state",
+                "Calculates cost savings vs non-cached calls",
+                "Unit tests verify 40% cost reduction on retries"
+            ],
+            "risk": [
+                "Cache invalidation logic may cause stale data"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-016",
+            "agent": "python-developer",
+            "objective": "Implement AgentCoordinator for specialist consultation",
+            "affected_components": [
+                "prp_langgraph/agents/agent_coordinator.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "AgentCoordinator loads agent registry from JSON",
+                "consult_specialist method selects appropriate agent",
+                "Calls Claude API with specialist system prompt",
+                "Returns recommendations as structured data",
+                "Unit tests mock API calls"
+            ],
+            "risk": [
+                "Agent registry format changes may break loading"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-017",
+            "agent": "python-developer",
+            "objective": "Implement conditional routing with route_gate_result",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "route_gate_result method returns success/retry/circuit-breaker",
+                "add_conditional_edges properly wires routing logic",
+                "State-based routing works for all gate results",
+                "Circuit breaker routing functional",
+                "Unit tests cover all routing paths"
+            ],
+            "risk": [
+                "Complex routing logic may have edge cases"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-018",
+            "agent": "python-developer",
+            "objective": "Implement checkpointing with SQLite persistence",
+            "affected_components": [
+                "prp_langgraph/utils/checkpointing.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Checkpoint state saved to SQLite after each node",
+                "resume() method restores state from checkpoint",
+                "Handles workflow crashes gracefully",
+                "Cleanup removes old checkpoints",
+                "Integration tests verify resume functionality"
+            ],
+            "risk": [
+                "Database corruption may prevent resume"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "t-019",
+            "agent": "test-automation",
+            "objective": "Create unit tests for PRPState schema validation",
+            "affected_components": [
+                "tests/unit/test_prp_state.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tests verify all required fields present",
+                "Tests check type annotations correct",
+                "Tests validate default values",
+                "100% code coverage for schema module",
+                "Tests run in <1 second"
+            ],
+            "risk": [
+                "Schema changes may require test updates"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "t-020",
+            "agent": "test-automation",
+            "objective": "Create integration tests for full workflow execution",
+            "affected_components": [
+                "tests/integration/test_workflow_execution.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tests run complete workflow end-to-end",
+                "Tests verify state transitions correct",
+                "Tests check cost tracking accurate",
+                "Tests validate retry logic functional",
+                "Tests complete in <30 seconds"
+            ],
+            "risk": [
+                "Integration tests may be flaky with external dependencies"
+            ],
+            "effort": "L"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "phase-1-documentation": "Tasks t-001 through t-010: Create all 10 learning lessons as standalone tutorials"
+        },
+        {
+            "phase-2-core-implementation": "Tasks t-011, t-012, t-017: Implement PRPState schema, BasePRPWorkflow, and routing logic"
+        },
+        {
+            "phase-3-gates": "Tasks t-013, t-014: Implement gate validation and retry logic"
+        },
+        {
+            "phase-4-optimization": "Tasks t-015, t-016, t-018: Implement context caching, agent coordination, and checkpointing"
+        },
+        {
+            "phase-5-testing": "Tasks t-019, t-020: Complete unit and integration testing"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "python-developer": "Implement all production code (PRPState, BasePRPWorkflow, gates, utilities)"
+        },
+        {
+            "test-automation": "Create comprehensive test suite with 100% coverage"
+        },
+        {
+            "architect-reviewer": "Review workflow architecture and state management design"
+        },
+        {
+            "devops-engineer": "Set up CI/CD pipeline and deployment automation"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "documentation-writer",
+            "question": "Should tutorials include video walkthroughs or just written content?"
+        },
+        {
+            "agent": "documentation-writer",
+            "question": "What is the target audience skill level (beginner/intermediate/advanced)?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "Which LangGraph version should be targeted (latest stable or specific version)?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "Should checkpointing use SQLite, PostgreSQL, or pluggable backend?"
+        },
+        {
+            "agent": "architect-reviewer",
+            "question": "Is the 6-gate workflow architecture finalized or subject to change?"
+        }
+    ]
+}
+```

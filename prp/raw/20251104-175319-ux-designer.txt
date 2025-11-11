@@ -1,0 +1,300 @@
+```json
+{
+    "agent": "python-developer",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature spans multiple lessons (01-10) requiring sequential implementation",
+            "Involves 6+ validation gates with complex interdependencies",
+            "Requires multi-agent coordination system",
+            "Crosses multiple architectural layers (state management, retry logic, API integration, cost optimization)"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "001",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 01 hello-langgraph with 2-node workflow (greet and farewell nodes)",
+            "affected_components": [
+                "lessons/01-hello-langgraph/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "StateGraph successfully compiles with 2 nodes",
+                "Workflow executes end-to-end with initial state input",
+                "State flows correctly from greet node to farewell node",
+                "Output matches expected greeting and farewell messages",
+                "pytest passes with 100% coverage for lesson 01"
+            ],
+            "risk": [
+                "LangGraph API changes may require adjustment",
+                "Python environment dependencies may conflict"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "002",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 02 state management with TypedDict PRPState schema",
+            "affected_components": [
+                "lessons/02-state-management/"
+            ],
+            "dependencies": ["001"],
+            "acceptance": [
+                "PRPState TypedDict defined with all required fields",
+                "State validation enforces type constraints",
+                "State updates preserve immutability patterns",
+                "State can be serialized/deserialized correctly",
+                "pytest passes with 100% coverage for lesson 02"
+            ],
+            "risk": [
+                "TypedDict limitations may require Pydantic migration",
+                "State schema evolution may break backward compatibility"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "003",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 03 conditional routing with declarative edge logic",
+            "affected_components": [
+                "lessons/03-conditional-routing/"
+            ],
+            "dependencies": ["002"],
+            "acceptance": [
+                "Conditional edges route based on state predicates",
+                "Success/failure paths execute correctly",
+                "Edge routing logic is declarative (no imperative if/else)",
+                "Multiple routing conditions can coexist",
+                "pytest passes with 100% coverage for lesson 03"
+            ],
+            "risk": [
+                "Complex routing logic may become difficult to debug",
+                "Edge condition conflicts may cause unpredictable behavior"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "004",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 04 retry patterns with 3-strike rule and circuit breaker",
+            "affected_components": [
+                "lessons/04-retry-patterns/"
+            ],
+            "dependencies": ["003"],
+            "acceptance": [
+                "Retry counter increments correctly on failures",
+                "3-strike rule triggers specialist consultation after 3 failures",
+                "Circuit breaker activates after 15 consecutive failures",
+                "State tracks retry history and failure counts",
+                "pytest passes with 100% coverage for lesson 04"
+            ],
+            "risk": [
+                "Retry logic may cause infinite loops if not bounded",
+                "Circuit breaker reset logic may be unclear"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "005",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 05 Claude API integration with Anthropic SDK",
+            "affected_components": [
+                "lessons/05-claude-api/"
+            ],
+            "dependencies": ["004"],
+            "acceptance": [
+                "Anthropic SDK successfully calls Claude API",
+                "API responses are parsed and added to state",
+                "Error handling covers rate limits and timeouts",
+                "API key is loaded from environment variables",
+                "pytest passes with 100% coverage including mocked API calls"
+            ],
+            "risk": [
+                "API rate limits may throttle during testing",
+                "API costs may accumulate during development"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "006",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 06 multi-node workflow with Gate 2 (coverage validation)",
+            "affected_components": [
+                "lessons/06-multi-node/"
+            ],
+            "dependencies": ["005"],
+            "acceptance": [
+                "Gate 2 node executes pytest coverage check",
+                "Coverage results are parsed and added to state",
+                "Pass/fail routing works based on 100% coverage threshold",
+                "Gate integrates with retry logic from lesson 04",
+                "pytest passes with 100% coverage for lesson 06"
+            ],
+            "risk": [
+                "Coverage tool integration may be fragile",
+                "False positives/negatives in coverage detection"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "007",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 07 cost optimization with context caching",
+            "affected_components": [
+                "lessons/07-cost-optimization/"
+            ],
+            "dependencies": ["006"],
+            "acceptance": [
+                "Context optimizer caches agent prompts between retries",
+                "Cache hit/miss is tracked in state",
+                "Cost reduction of 40% demonstrated in tests",
+                "Cache invalidation works correctly on state changes",
+                "pytest passes with 100% coverage for lesson 07"
+            ],
+            "risk": [
+                "Cache invalidation bugs may cause stale data",
+                "Memory usage may increase with large caches"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "008",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 08 multi-agent coordination for specialist consultation",
+            "affected_components": [
+                "lessons/08-multi-agent/"
+            ],
+            "dependencies": ["007"],
+            "acceptance": [
+                "Agent coordinator routes to correct specialist based on gate failure",
+                "Specialist recommendations are integrated into state",
+                "Multiple specialists can be consulted in sequence",
+                "Specialist responses use cached context",
+                "pytest passes with 100% coverage for lesson 08"
+            ],
+            "risk": [
+                "Agent coordination logic may become complex",
+                "Specialist availability may be inconsistent"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "009",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 09 complete PRP workflow with all 6 validation gates",
+            "affected_components": [
+                "lessons/09-complete-prp/"
+            ],
+            "dependencies": ["008"],
+            "acceptance": [
+                "All 6 gates (TDD, coverage, mocks, mutation, security, production-ready) execute in sequence",
+                "Gate results are aggregated in final state",
+                "Workflow handles mixed pass/fail scenarios correctly",
+                "Full retry and specialist consultation logic works end-to-end",
+                "pytest passes with 100% coverage for lesson 09"
+            ],
+            "risk": [
+                "Integration complexity may reveal unforeseen edge cases",
+                "Long execution time may make testing difficult"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "010",
+            "agent": "devops-engineer",
+            "objective": "Implement Lesson 10 production deployment with checkpointing and monitoring",
+            "affected_components": [
+                "lessons/10-production/"
+            ],
+            "dependencies": ["009"],
+            "acceptance": [
+                "Checkpointing enables workflow resume after crash",
+                "State persistence layer (SQLite/PostgreSQL) is configured",
+                "Monitoring dashboard displays workflow status and costs",
+                "Deployment to ~/.claude/langgraph/ is automated",
+                "Documentation covers deployment and monitoring setup"
+            ],
+            "risk": [
+                "State persistence may introduce performance overhead",
+                "Monitoring integration may require additional infrastructure"
+            ],
+            "effort": "L"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "Lesson 01 hello-langgraph: Simplest 2-node workflow to validate LangGraph basics"
+        },
+        {
+            "t-002": "Lesson 02 state management: Foundation for all subsequent state-dependent logic"
+        },
+        {
+            "t-003": "Lesson 03 conditional routing: Enables dynamic workflow paths"
+        },
+        {
+            "t-004": "Lesson 04 retry patterns: Critical for production resilience"
+        },
+        {
+            "t-005": "Lesson 05 Claude API: Enables LLM integration for validations"
+        },
+        {
+            "t-006": "Lesson 06 multi-node workflow: First real validation gate implementation"
+        },
+        {
+            "t-007": "Lesson 07 cost optimization: Reduces API costs by 40%"
+        },
+        {
+            "t-008": "Lesson 08 multi-agent: Enables specialist consultation on failures"
+        },
+        {
+            "t-009": "Lesson 09 complete PRP: Integrates all 6 validation gates"
+        },
+        {
+            "t-010": "Lesson 10 production: Deployment, checkpointing, and monitoring"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "python-developer": "Implement lessons 01-09 (core workflow and validation logic)"
+        },
+        {
+            "devops-engineer": "Implement lesson 10 (production deployment and monitoring)"
+        },
+        {
+            "test-automation": "Create comprehensive test suites for each lesson with 100% coverage"
+        },
+        {
+            "documentation-writer": "Create detailed documentation for each lesson including examples and troubleshooting"
+        },
+        {
+            "architect-reviewer": "Review overall workflow architecture and validate design patterns"
+        },
+        {
+            "security-reviewer": "Review API key handling and state persistence security"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "python-developer",
+            "question": "Should lessons 01-10 be implemented sequentially or can some be parallelized?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "What is the target Python version (3.10+, 3.11+, 3.12+)?"
+        },
+        {
+            "agent": "devops-engineer",
+            "question": "Which state persistence backend should be used for production (SQLite, PostgreSQL, Redis)?"
+        },
+        {
+            "agent": "test-automation",
+            "question": "Should integration tests use real Claude API calls or mocked responses?"
+        },
+        {
+            "agent": "architect-reviewer",
+            "question": "Should the final implementation support multiple concurrent workflows or single-threaded execution?"
+        }
+    ]
+}
+```

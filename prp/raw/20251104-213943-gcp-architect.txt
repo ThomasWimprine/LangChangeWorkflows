@@ -1,0 +1,286 @@
+I need to read the feature file first to understand what needs to be decomposed.
+
+```json
+{
+    "agent": "gcp-architect",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature spans multiple lessons (01-10) requiring sequential implementation",
+            "Involves 6+ validation gates with different technical requirements",
+            "Requires state management, retry logic, API integration, and multi-agent coordination",
+            "Cannot be completed in a single development cycle"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "001",
+            "agent": "python-developer",
+            "objective": "Implement basic LangGraph workflow with 2-node hello/farewell pattern",
+            "affected_components": [
+                "lessons/01-hello-langgraph/hello_graph.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "StateGraph creates workflow with 2 nodes successfully",
+                "State flows from greet_node to farewell_node with user_name preserved",
+                "Compiled graph executes invoke() and returns final state",
+                "Example runs and prints greeting + farewell messages",
+                "Unit tests verify state transformation through workflow"
+            ],
+            "risk": [
+                "LangGraph API changes requiring code updates"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "002",
+            "agent": "python-developer",
+            "objective": "Add TypedDict state schema with validation for workflow state management",
+            "affected_components": [
+                "lessons/02-state-management/typed_state.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "GraphState TypedDict defines required and optional fields with types",
+                "State validation catches missing required fields before execution",
+                "Complex nested state (lists, dicts) handled correctly",
+                "State mutations tracked and immutability enforced where needed",
+                "Tests verify schema validation and type checking"
+            ],
+            "risk": [
+                "TypedDict limitations with complex nested structures"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "003",
+            "agent": "python-developer",
+            "objective": "Implement conditional routing with add_conditional_edges for branching logic",
+            "affected_components": [
+                "lessons/03-conditional-routing/routing_graph.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Router function evaluates state and returns next node name",
+                "add_conditional_edges creates branches based on router output",
+                "Multiple paths execute correctly based on state conditions",
+                "Dead-end paths handled with explicit END routing",
+                "Tests verify all routing paths execute correctly"
+            ],
+            "risk": [
+                "Complex routing logic becoming difficult to debug"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "004",
+            "agent": "python-developer",
+            "objective": "Build retry pattern with 3-strike rule and failure state tracking",
+            "affected_components": [
+                "lessons/04-retry-patterns/retry_graph.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Retry counter increments on node failure up to max 3 attempts",
+                "Conditional routing sends to retry or failure node based on counter",
+                "State preserves failure history and retry metadata",
+                "Circuit breaker activates after consecutive failure threshold",
+                "Tests verify retry logic with simulated failures"
+            ],
+            "risk": [
+                "Infinite retry loops if circuit breaker fails"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "005",
+            "agent": "python-developer",
+            "objective": "Integrate Anthropic Claude API calls within workflow nodes with error handling",
+            "affected_components": [
+                "lessons/05-claude-api/claude_node.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Node calls Claude API with system and user prompts from state",
+                "API responses parsed and added to state successfully",
+                "API errors caught and routed to failure handling",
+                "Token usage and costs tracked in state",
+                "Tests use mocked API responses to verify integration"
+            ],
+            "risk": [
+                "API rate limits causing workflow failures",
+                "High token costs from unoptimized prompts"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "006",
+            "agent": "python-developer",
+            "objective": "Create multi-gate validation workflow with 6 sequential validation nodes",
+            "affected_components": [
+                "lessons/06-multi-node/multi_gate_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "6 gate nodes added to graph with sequential edges",
+                "Each gate validates specific criteria and updates state",
+                "Failed gates route to retry handler with gate-specific context",
+                "Passed gates route to next gate in sequence",
+                "Tests verify complete workflow execution with mixed pass/fail scenarios"
+            ],
+            "risk": [
+                "Long sequential workflows timing out",
+                "State bloat from accumulating gate results"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "007",
+            "agent": "python-developer",
+            "objective": "Implement context caching optimization for prompt reuse across retries",
+            "affected_components": [
+                "lessons/07-cost-optimization/context_cache.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "System prompts cached with cache_control markers",
+                "Cache hits tracked in state with cost savings calculated",
+                "Cached context reused on retries reducing token usage by 40%+",
+                "Cache invalidation works when prompts change",
+                "Tests verify cache behavior and cost tracking accuracy"
+            ],
+            "risk": [
+                "Stale cached content causing incorrect responses"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "008",
+            "agent": "python-developer",
+            "objective": "Add multi-agent coordinator for specialist consultation after failures",
+            "affected_components": [
+                "lessons/08-multi-agent/agent_coordinator.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Coordinator selects appropriate specialist agent based on gate failure",
+                "Specialist agents invoked with failure context and state",
+                "Specialist recommendations merged into workflow state",
+                "Agent responses cached for reuse in same workflow",
+                "Tests verify specialist selection and recommendation flow"
+            ],
+            "risk": [
+                "Specialist agents giving conflicting recommendations"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "009",
+            "agent": "python-developer",
+            "objective": "Build complete PRP workflow integrating all gates with retry and specialist logic",
+            "affected_components": [
+                "prp_langgraph/workflows/complete_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "All 6 validation gates integrated with proper routing",
+                "Retry logic with 3-strike rule works for each gate",
+                "Specialist consultation triggered on 3rd failure",
+                "Circuit breaker halts workflow after 15 consecutive failures",
+                "Complete workflow tested end-to-end with real PRP files"
+            ],
+            "risk": [
+                "Complex workflow state becoming difficult to debug",
+                "Long execution times causing timeouts"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "010",
+            "agent": "devops-engineer",
+            "objective": "Deploy workflow with checkpointing and production monitoring",
+            "affected_components": [
+                "deployment/workflow_deploy.py",
+                "config/production.yaml"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Workflow deployed with SQLite checkpointing enabled",
+                "Failed workflows resumable from last checkpoint",
+                "Prometheus metrics exported for workflow monitoring",
+                "Health check endpoint returns workflow status",
+                "Production deployment tested with sample PRPs"
+            ],
+            "risk": [
+                "Checkpoint corruption causing resume failures"
+            ],
+            "effort": "M"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "Lesson 01 - Hello LangGraph (basic 2-node workflow)"
+        },
+        {
+            "t-002": "Lesson 02 - State Management (TypedDict schemas)"
+        },
+        {
+            "t-003": "Lesson 03 - Conditional Routing (branching logic)"
+        },
+        {
+            "t-004": "Lesson 04 - Retry Patterns (failure handling)"
+        },
+        {
+            "t-005": "Lesson 05 - Claude API Integration"
+        },
+        {
+            "t-006": "Lesson 06 - Multi-Gate Workflow (6 validation gates)"
+        },
+        {
+            "t-007": "Lesson 07 - Cost Optimization (context caching)"
+        },
+        {
+            "t-008": "Lesson 08 - Multi-Agent Coordination"
+        },
+        {
+            "t-009": "Lesson 09 - Complete PRP Implementation"
+        },
+        {
+            "t-010": "Lesson 10 - Production Deployment"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "python-developer": "Primary development agent for lessons 01-09 (workflow implementation)"
+        },
+        {
+            "devops-engineer": "Production deployment, monitoring, and checkpointing setup (lesson 10)"
+        },
+        {
+            "test-automation": "Comprehensive test suite for each lesson with mocked API responses"
+        },
+        {
+            "documentation-writer": "Lesson documentation and interactive walkthrough guides"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "python-developer",
+            "question": "Should lesson examples use real Claude API calls or mocked responses for cost control during development?"
+        },
+        {
+            "agent": "architect-reviewer",
+            "question": "Is the 6-gate validation sequence (TDD, coverage, mock, mutation, security, production-ready) the final order or subject to change?"
+        },
+        {
+            "agent": "devops-engineer",
+            "question": "What is the target deployment environment - local dev only, or production deployment with scaling requirements?"
+        },
+        {
+            "agent": "test-automation",
+            "question": "Should integration tests run against real validation tools (pytest, tfsec, etc.) or use simulated results?"
+        }
+    ]
+}
+```

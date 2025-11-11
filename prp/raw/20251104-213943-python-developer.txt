@@ -1,0 +1,303 @@
+```json
+{
+    "agent": "python-developer",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature spans multiple learning lessons (10 total)",
+            "Involves infrastructure setup, workflow implementation, and production deployment",
+            "Requires coordination across multiple components (lessons, workflows, documentation)",
+            "Each lesson represents a distinct atomic unit of work"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "001",
+            "agent": "python-developer",
+            "objective": "Create Lesson 01 'Hello LangGraph' with simplest 2-node workflow",
+            "affected_components": [
+                "lessons/01-hello-langgraph/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Lesson directory created with README.md explaining concepts",
+                "hello_world.py implements 2-node workflow (greet → farewell)",
+                "Workflow executes successfully and prints expected output",
+                "Code includes inline comments explaining each LangGraph concept",
+                "Test file validates workflow execution"
+            ],
+            "risk": [
+                "Initial LangGraph setup may reveal environment issues"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "002",
+            "agent": "python-developer",
+            "objective": "Create Lesson 02 'State Management' with TypedDict schemas",
+            "affected_components": [
+                "lessons/02-state-management/"
+            ],
+            "dependencies": [
+                "001"
+            ],
+            "acceptance": [
+                "Lesson demonstrates complex state with TypedDict",
+                "Example shows state persistence across nodes",
+                "State validation and type checking implemented",
+                "Documentation explains state design patterns",
+                "Tests verify state integrity throughout workflow"
+            ],
+            "risk": [
+                "Type hinting complexity may require iteration"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "003",
+            "agent": "python-developer",
+            "objective": "Create Lesson 03 'Conditional Routing' with decision logic",
+            "affected_components": [
+                "lessons/03-conditional-routing/"
+            ],
+            "dependencies": [
+                "002"
+            ],
+            "acceptance": [
+                "Implements conditional edges with lambda routing",
+                "Demonstrates multiple routing paths based on state",
+                "Examples show both simple and complex routing logic",
+                "Documentation explains routing patterns and best practices",
+                "Tests verify all routing paths execute correctly"
+            ],
+            "risk": [
+                "Complex routing logic may need debugging"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "004",
+            "agent": "python-developer",
+            "objective": "Create Lesson 04 'Retry Patterns' with failure handling",
+            "affected_components": [
+                "lessons/04-retry-patterns/"
+            ],
+            "dependencies": [
+                "003"
+            ],
+            "acceptance": [
+                "Implements 3-strike retry rule",
+                "Demonstrates exponential backoff pattern",
+                "Circuit breaker pattern implemented (15 consecutive failures)",
+                "Failure state tracking and logging included",
+                "Tests verify retry logic and failure thresholds"
+            ],
+            "risk": [
+                "Retry timing may need tuning for responsiveness"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "005",
+            "agent": "python-developer",
+            "objective": "Create Lesson 05 'Claude API Integration' with LLM nodes",
+            "affected_components": [
+                "lessons/05-claude-api/"
+            ],
+            "dependencies": [
+                "004"
+            ],
+            "acceptance": [
+                "Node successfully calls Claude API",
+                "API response integrated into workflow state",
+                "Error handling for API failures implemented",
+                "Cost tracking for API calls included",
+                "Tests use mocked API responses"
+            ],
+            "risk": [
+                "API rate limits may affect testing",
+                "Requires valid ANTHROPIC_API_KEY"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "006",
+            "agent": "python-developer",
+            "objective": "Create Lesson 06 'Multi-Node Workflows' with validation gates",
+            "affected_components": [
+                "lessons/06-multi-node/"
+            ],
+            "dependencies": [
+                "005"
+            ],
+            "acceptance": [
+                "Workflow contains 3+ validation nodes",
+                "Nodes communicate via shared state",
+                "Conditional routing between validation gates",
+                "Documentation shows workflow visualization",
+                "Tests verify complete workflow execution"
+            ],
+            "risk": [
+                "State management complexity increases with more nodes"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "007",
+            "agent": "python-developer",
+            "objective": "Create Lesson 07 'Cost Optimization' with context caching",
+            "affected_components": [
+                "lessons/07-cost-optimization/"
+            ],
+            "dependencies": [
+                "005"
+            ],
+            "acceptance": [
+                "Context caching implementation reduces token usage by 40%+",
+                "Cost tracking dashboard shows savings",
+                "Cache hit/miss metrics collected",
+                "Documentation explains caching strategy",
+                "Tests verify cache effectiveness"
+            ],
+            "risk": [
+                "Cache invalidation logic may need refinement"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "008",
+            "agent": "python-developer",
+            "objective": "Create Lesson 08 'Multi-Agent Coordination' with specialist consultation",
+            "affected_components": [
+                "lessons/08-multi-agent/"
+            ],
+            "dependencies": [
+                "006"
+            ],
+            "acceptance": [
+                "Multiple agent types coordinated in workflow",
+                "Agent selection logic based on task requirements",
+                "Specialist consultation after 3 failures implemented",
+                "Documentation shows agent coordination patterns",
+                "Tests verify agent delegation logic"
+            ],
+            "risk": [
+                "Agent coordination complexity may require iteration"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "009",
+            "agent": "python-developer",
+            "objective": "Create Lesson 09 'Complete PRP Workflow' with all 6 gates",
+            "affected_components": [
+                "lessons/09-complete-prp/"
+            ],
+            "dependencies": [
+                "006",
+                "007",
+                "008"
+            ],
+            "acceptance": [
+                "All 6 validation gates implemented (TDD, coverage, mocks, mutation, security, production-ready)",
+                "Complete workflow executes from start to finish",
+                "State management handles complex multi-gate flow",
+                "Cost optimization applied throughout",
+                "Tests achieve 100% coverage of workflow paths"
+            ],
+            "risk": [
+                "Integration complexity across all previous lessons",
+                "Performance testing may reveal bottlenecks"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "010",
+            "agent": "devops-engineer",
+            "objective": "Create Lesson 10 'Production Deployment' with global installation",
+            "affected_components": [
+                "lessons/10-production/"
+            ],
+            "dependencies": [
+                "009"
+            ],
+            "acceptance": [
+                "Workflow deployable to ~/.claude/langgraph/",
+                "Auto-detection runner works from any project directory",
+                "Documentation covers deployment and usage",
+                "Integration with existing ClaudeAgents infrastructure",
+                "Production readiness checklist completed"
+            ],
+            "risk": [
+                "Path resolution across different project structures",
+                "Compatibility with existing ClaudeAgents setup"
+            ],
+            "effort": "M"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "Foundation setup - Creates base lesson structure and simplest workflow"
+        },
+        {
+            "t-002": "State management - Builds on foundation with complex state handling"
+        },
+        {
+            "t-003": "Routing logic - Adds decision-making capabilities to workflows"
+        },
+        {
+            "t-004": "Failure resilience - Implements retry and circuit breaker patterns"
+        },
+        {
+            "t-005": "LLM integration - Connects workflows to Claude API"
+        },
+        {
+            "t-006": "Complex workflows - Combines multiple nodes into validation pipelines"
+        },
+        {
+            "t-007": "Cost optimization - Reduces API costs through caching"
+        },
+        {
+            "t-008": "Agent coordination - Enables multi-agent collaboration"
+        },
+        {
+            "t-009": "Complete integration - Assembles all components into production workflow"
+        },
+        {
+            "t-010": "Production deployment - Enables global usage across projects"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "documentation-writer": "Create comprehensive learning guide explaining LangGraph concepts and architecture"
+        },
+        {
+            "test-automation": "Design test strategy covering unit, integration, and end-to-end workflow testing"
+        },
+        {
+            "architect-reviewer": "Review workflow architecture for scalability and maintainability"
+        },
+        {
+            "ux-designer": "Design visual workflow diagrams and interactive learning materials"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "python-developer",
+            "question": "Should each lesson be fully independent (copy dependencies) or share common utilities from a central location?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "What is the target Python version compatibility (3.10+, 3.11+, 3.12+)?"
+        },
+        {
+            "agent": "test-automation",
+            "question": "Should tests use real Claude API calls (with rate limiting) or mocked responses for reproducibility?"
+        },
+        {
+            "agent": "architect-reviewer",
+            "question": "Should the final production workflow replace or complement the existing POC scripts (draft-001.py through draft-004.py)?"
+        }
+    ]
+}
+```

@@ -1,0 +1,405 @@
+```json
+{
+    "agent": "system-architect",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature involves multiple complex workflows (draft-prp, agent orchestration, validation gates)",
+            "Requires coordination across 6+ specialized agents",
+            "Dependencies span multiple architectural layers (workflow, validation, agent coordination)",
+            "Multiple integration points (LangGraph, Claude API, file system, validation tools)"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "001",
+            "agent": "python-developer",
+            "objective": "Create PRPState TypedDict schema with all workflow state fields",
+            "affected_components": [
+                "prp_langgraph/schemas/prp_state.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "PRPState TypedDict defines all 15+ required fields with correct types",
+                "Includes workflow_id, phase, gates tracking, cost tracking fields",
+                "Type hints validated with mypy --strict",
+                "Unit tests verify schema instantiation and field access",
+                "Documentation includes field descriptions and examples"
+            ],
+            "risk": [
+                "Schema changes may require updates across multiple modules"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "002",
+            "agent": "python-developer",
+            "objective": "Implement BasePRPWorkflow class with StateGraph initialization",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "001"
+            ],
+            "acceptance": [
+                "BasePRPWorkflow class initializes StateGraph with PRPState schema",
+                "Constructor accepts enable_checkpointing and enable_context_optimization flags",
+                "Class includes config management for agents, gates, validation thresholds",
+                "Unit tests verify StateGraph creation and configuration loading",
+                "Documentation covers initialization parameters and usage"
+            ],
+            "risk": [
+                "StateGraph API changes in LangGraph library updates"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "003",
+            "agent": "python-developer",
+            "objective": "Create initialize_workflow node for workflow setup",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "002"
+            ],
+            "acceptance": [
+                "initialize_workflow node generates unique workflow_id",
+                "Sets workflow_status to 'initialized' and timestamps",
+                "Initializes empty tracking dictionaries (gates_passed, gates_failed, cost_tracking)",
+                "Returns updated PRPState with all initialization fields set",
+                "Unit tests verify state initialization and field population"
+            ],
+            "risk": [
+                "Workflow ID collision in concurrent executions"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "004",
+            "agent": "python-developer",
+            "objective": "Implement ContextOptimizer class for prompt caching",
+            "affected_components": [
+                "prp_langgraph/optimization/context_optimizer.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "ContextOptimizer caches agent system prompts and file contents",
+                "Implements cache key generation based on content hashes",
+                "Tracks cache hits/misses in state['cache_hits'] and state['api_calls']",
+                "Unit tests verify caching behavior and cost reduction (40%+ savings)",
+                "Documentation explains caching strategy and configuration"
+            ],
+            "risk": [
+                "Cache invalidation complexity with file content changes"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "005",
+            "agent": "python-developer",
+            "objective": "Create ValidationResult TypedDict and base validation function",
+            "affected_components": [
+                "prp_langgraph/schemas/prp_state.py"
+            ],
+            "dependencies": [
+                "001"
+            ],
+            "acceptance": [
+                "ValidationResult TypedDict includes gate_id, passed, message, details, cost, tokens_used",
+                "Base validation function signature defined with state, config, context_optimizer params",
+                "Type hints validated with mypy --strict",
+                "Unit tests verify ValidationResult structure",
+                "Documentation includes usage examples for gate implementations"
+            ],
+            "risk": [
+                "Schema changes may affect existing gate implementations"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "006",
+            "agent": "test-automation",
+            "objective": "Implement Gate 2 coverage validation with pytest integration",
+            "affected_components": [
+                "prp_langgraph/gates/gate2_coverage.py"
+            ],
+            "dependencies": [
+                "005"
+            ],
+            "acceptance": [
+                "validate_coverage_gate runs pytest --cov and parses coverage.json",
+                "Returns ValidationResult with passed=True only if coverage >= 100%",
+                "Tracks API costs and tokens used in validation result",
+                "Unit tests verify coverage parsing and threshold validation",
+                "Integration tests run against sample project with known coverage"
+            ],
+            "risk": [
+                "pytest-cov version compatibility, coverage.json format changes"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "007",
+            "agent": "python-developer",
+            "objective": "Add gate_2_coverage node to BasePRPWorkflow graph",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "003",
+                "006"
+            ],
+            "acceptance": [
+                "gate_2_coverage node calls validate_coverage_gate with state and config",
+                "Node updates state with validation result and cost tracking",
+                "Node connected to initialize_workflow with simple edge",
+                "Unit tests verify node execution and state updates",
+                "Integration tests verify full workflow execution through Gate 2"
+            ],
+            "risk": [
+                "Node execution order dependencies"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "008",
+            "agent": "python-developer",
+            "objective": "Implement route_gate_result conditional routing function",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "007"
+            ],
+            "acceptance": [
+                "route_gate_result returns 'success' if current_validation_result.passed=True",
+                "Returns 'retry' if passed=False and consecutive_failures < 15",
+                "Returns 'circuit_breaker' if consecutive_failures >= 15",
+                "Unit tests verify all routing conditions",
+                "Documentation explains routing logic and edge cases"
+            ],
+            "risk": [
+                "Complex conditional logic may need refactoring"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "009",
+            "agent": "python-developer",
+            "objective": "Create handle_failure node with 3-strike retry logic",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "008"
+            ],
+            "acceptance": [
+                "handle_failure increments gates_failed[gate_id] retry counter",
+                "Calls consult_specialist after 3 failures for same gate",
+                "Updates consecutive_failures counter in state",
+                "Activates circuit breaker if consecutive_failures >= 15",
+                "Unit tests verify retry counting, specialist consultation trigger, circuit breaker"
+            ],
+            "risk": [
+                "Retry counter persistence across workflow restarts"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "010",
+            "agent": "python-developer",
+            "objective": "Add conditional edges from gate_2_coverage to routing targets",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "008",
+                "009"
+            ],
+            "acceptance": [
+                "Conditional edge from gate_2_coverage uses route_gate_result function",
+                "Edge routes to workflow_success, handle_failure, or circuit_breaker nodes",
+                "Unit tests verify routing for all three conditions",
+                "Integration tests verify full retry cycle with failures",
+                "Documentation includes routing diagram and decision tree"
+            ],
+            "risk": [
+                "Edge routing complexity with multiple conditional paths"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "011",
+            "agent": "python-developer",
+            "objective": "Implement workflow_success terminal node",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "010"
+            ],
+            "acceptance": [
+                "workflow_success sets workflow_status to 'completed'",
+                "Adds completion timestamp to state",
+                "Calculates total cost from cost_tracking dict",
+                "Returns final PRPState with success metadata",
+                "Unit tests verify terminal state and cost aggregation"
+            ],
+            "risk": [
+                "None - terminal node"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "012",
+            "agent": "python-developer",
+            "objective": "Implement circuit_breaker terminal node",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "010"
+            ],
+            "acceptance": [
+                "circuit_breaker sets workflow_status to 'circuit_breaker_triggered'",
+                "Sets circuit_breaker_active=True in state",
+                "Logs failure reason and consecutive failure count",
+                "Returns final PRPState with failure metadata",
+                "Unit tests verify terminal state and failure tracking"
+            ],
+            "risk": [
+                "None - terminal node"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "013",
+            "agent": "python-developer",
+            "objective": "Implement AgentCoordinator class for specialist consultation",
+            "affected_components": [
+                "prp_langgraph/coordination/agent_coordinator.py"
+            ],
+            "dependencies": [
+                "004"
+            ],
+            "acceptance": [
+                "AgentCoordinator maps gate_id to specialist agent (test-automation, security-reviewer, etc)",
+                "consult_specialist method builds context from state and validation history",
+                "Uses ContextOptimizer for cached API calls to specialist agents",
+                "Returns specialist recommendations dict with suggested actions",
+                "Unit tests verify agent mapping and recommendation structure"
+            ],
+            "risk": [
+                "Agent availability and API rate limits"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "014",
+            "agent": "python-developer",
+            "objective": "Create execute method for BasePRPWorkflow with checkpointing",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "011",
+                "012",
+                "013"
+            ],
+            "acceptance": [
+                "execute method compiles StateGraph into executable app",
+                "Accepts prp_file and initial_state parameters",
+                "Configures checkpointing if enable_checkpointing=True",
+                "Invokes workflow and returns final state with cost tracking",
+                "Unit tests verify compilation, execution, and checkpointing"
+            ],
+            "risk": [
+                "Checkpoint storage and retrieval failures"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "015",
+            "agent": "documentation-writer",
+            "objective": "Create comprehensive workflow documentation with examples",
+            "affected_components": [
+                "docs/WORKFLOW_GUIDE.md"
+            ],
+            "dependencies": [
+                "014"
+            ],
+            "acceptance": [
+                "Documentation explains workflow initialization and execution",
+                "Includes state flow diagrams and node descriptions",
+                "Provides code examples for basic and advanced usage",
+                "Documents retry logic, circuit breaker, and specialist consultation",
+                "Includes troubleshooting section and FAQ"
+            ],
+            "risk": [
+                "Documentation drift if code changes"
+            ],
+            "effort": "M"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "Schema and state management foundation (tasks 001, 005)"
+        },
+        {
+            "t-002": "Core workflow infrastructure (tasks 002, 003, 014)"
+        },
+        {
+            "t-003": "Optimization and coordination (tasks 004, 013)"
+        },
+        {
+            "t-004": "Gate 2 implementation (tasks 006, 007)"
+        },
+        {
+            "t-005": "Routing and failure handling (tasks 008, 009, 010)"
+        },
+        {
+            "t-006": "Terminal nodes and documentation (tasks 011, 012, 015)"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "python-developer": "Primary implementation for all workflow, schema, and gate logic (tasks 001-014)"
+        },
+        {
+            "test-automation": "Gate 2 pytest integration and validation testing (task 006)"
+        },
+        {
+            "documentation-writer": "Comprehensive workflow documentation (task 015)"
+        },
+        {
+            "architect-reviewer": "Review workflow architecture and node design patterns after task 010"
+        },
+        {
+            "security-reviewer": "Review specialist consultation security and API access patterns after task 013"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "system-architect",
+            "question": "Should checkpointing use SQLite (default) or Redis for production deployments?"
+        },
+        {
+            "agent": "system-architect",
+            "question": "What is the expected volume of concurrent workflow executions for circuit breaker tuning?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "Should ContextOptimizer use in-memory cache or persistent storage (Redis/file)?"
+        },
+        {
+            "agent": "test-automation",
+            "question": "Which pytest-cov version should be targeted for coverage.json parsing compatibility?"
+        },
+        {
+            "agent": "security-reviewer",
+            "question": "Should specialist consultation API calls be rate-limited or authenticated differently?"
+        }
+    ]
+}
+```

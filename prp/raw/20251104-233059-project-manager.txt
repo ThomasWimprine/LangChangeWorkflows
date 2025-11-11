@@ -1,0 +1,304 @@
+I need to read the feature file first to understand what needs to be decomposed.
+
+```json
+{
+    "agent": "project-manager",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature involves multiple learning modules (10 lessons) requiring separate implementations",
+            "Multiple components: lessons directory structure, Python code examples, documentation files",
+            "Dependencies between lessons require sequential implementation",
+            "Testing and validation spans multiple lesson implementations"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "001",
+            "agent": "documentation-writer",
+            "objective": "Create lessons directory structure and lesson 00 setup documentation",
+            "affected_components": [
+                "lessons/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "lessons/ directory exists with 00-setup/ subdirectory",
+                "README.md in 00-setup/ documents environment setup steps",
+                "requirements.txt file created with minimal dependencies (langgraph, anthropic)",
+                ".env.example file created with ANTHROPIC_API_KEY placeholder",
+                "Setup verification script included"
+            ],
+            "risk": [
+                "Minimal - documentation only task"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "002",
+            "agent": "python-developer",
+            "objective": "Implement lesson 01 hello-langgraph basic workflow",
+            "affected_components": [
+                "lessons/01-hello-langgraph/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Simple 2-node workflow (greet -> farewell) implemented",
+                "State management using TypedDict schema",
+                "Workflow compiles and executes successfully",
+                "Unit tests achieve 100% coverage",
+                "Example output demonstrates state flow"
+            ],
+            "risk": [
+                "Low - isolated example with no external dependencies"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "003",
+            "agent": "python-developer",
+            "objective": "Implement lesson 02 state management with complex TypedDict schemas",
+            "affected_components": [
+                "lessons/02-state-management/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "TypedDict schema with multiple fields and types implemented",
+                "State persistence and retrieval demonstrated",
+                "State validation logic included",
+                "Unit tests verify state transformations with 100% coverage",
+                "Documentation explains state design patterns"
+            ],
+            "risk": [
+                "Low - builds on lesson 01 patterns"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "004",
+            "agent": "python-developer",
+            "objective": "Implement lesson 03 conditional routing with decision logic",
+            "affected_components": [
+                "lessons/03-conditional-routing/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Conditional edges implemented with routing function",
+                "Multiple routing paths (success/retry/fail) demonstrated",
+                "Routing decisions based on state values",
+                "Unit tests cover all routing paths with 100% coverage",
+                "Visual diagram of routing logic included"
+            ],
+            "risk": [
+                "Low - standard LangGraph pattern"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "005",
+            "agent": "python-developer",
+            "objective": "Implement lesson 04 retry patterns and failure handling",
+            "affected_components": [
+                "lessons/04-retry-patterns/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "3-strike retry logic implemented",
+                "Failure state tracking in workflow state",
+                "Circuit breaker pattern demonstrated",
+                "Unit tests verify retry behavior with 100% coverage",
+                "Documentation explains retry strategies"
+            ],
+            "risk": [
+                "Medium - requires careful state management"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "006",
+            "agent": "python-developer",
+            "objective": "Implement lesson 05 Claude API integration",
+            "affected_components": [
+                "lessons/05-claude-api/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Anthropic SDK integrated in workflow nodes",
+                "API call with prompt and response handling",
+                "Error handling for API failures",
+                "Unit tests with mocked API responses achieve 100% coverage",
+                "Cost tracking for API calls implemented"
+            ],
+            "risk": [
+                "Medium - requires API key and external service"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "007",
+            "agent": "python-developer",
+            "objective": "Implement lesson 06 multi-node workflows with gates",
+            "affected_components": [
+                "lessons/06-multi-node/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Workflow with 3+ validation gates implemented",
+                "Gate pass/fail logic with conditional routing",
+                "State tracks gate results",
+                "Unit tests verify gate execution with 100% coverage",
+                "Documentation shows gate coordination patterns"
+            ],
+            "risk": [
+                "Medium - complex workflow orchestration"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "008",
+            "agent": "python-developer",
+            "objective": "Implement lesson 07 cost optimization and caching",
+            "affected_components": [
+                "lessons/07-cost-optimization/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Context caching implemented for API calls",
+                "Cost tracking with before/after comparison",
+                "Cache hit/miss metrics collected",
+                "Unit tests verify caching behavior with 100% coverage",
+                "Documentation shows 40% cost reduction examples"
+            ],
+            "risk": [
+                "Medium - requires understanding of Anthropic caching"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "009",
+            "agent": "python-developer",
+            "objective": "Implement lesson 08 multi-agent coordination",
+            "affected_components": [
+                "lessons/08-multi-agent/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Multiple specialist agents coordinated in workflow",
+                "Agent selection logic based on task type",
+                "Agent responses aggregated in state",
+                "Unit tests verify agent coordination with 100% coverage",
+                "Documentation explains delegation patterns"
+            ],
+            "risk": [
+                "High - complex agent orchestration"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "010",
+            "agent": "python-developer",
+            "objective": "Implement lesson 09 complete PRP workflow",
+            "affected_components": [
+                "lessons/09-complete-prp/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "All 6 validation gates integrated (TDD, coverage, mocks, mutation, security, production-ready)",
+                "End-to-end workflow executes successfully",
+                "State management for complex workflow",
+                "Unit tests achieve 100% coverage across all gates",
+                "Documentation provides complete usage examples"
+            ],
+            "risk": [
+                "High - integrates all previous lessons"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "011",
+            "agent": "devops-engineer",
+            "objective": "Implement lesson 10 production deployment",
+            "affected_components": [
+                "lessons/10-production/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Deployment configuration for workflow",
+                "Monitoring and logging setup",
+                "Error alerting configured",
+                "Production readiness checklist completed",
+                "Documentation covers deployment procedures"
+            ],
+            "risk": [
+                "Medium - requires infrastructure knowledge"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "012",
+            "agent": "documentation-writer",
+            "objective": "Create comprehensive LEARNING_GUIDE.md",
+            "affected_components": [
+                "docs/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "LEARNING_GUIDE.md created with lesson progression",
+                "Each lesson links to its directory",
+                "Learning objectives clearly stated",
+                "Prerequisites and setup instructions included",
+                "Troubleshooting section added"
+            ],
+            "risk": [
+                "Minimal - documentation task"
+            ],
+            "effort": "S"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "Setup and infrastructure (tasks 001, 012)"
+        },
+        {
+            "t-002": "Basic LangGraph patterns (tasks 002, 003, 004)"
+        },
+        {
+            "t-003": "Advanced patterns (tasks 005, 006, 007, 008)"
+        },
+        {
+            "t-004": "Complete integration (tasks 009, 010, 011)"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "documentation-writer": "All documentation tasks (001, 012) and README files for each lesson"
+        },
+        {
+            "python-developer": "All Python implementation tasks (002-010) with TDD enforcement"
+        },
+        {
+            "devops-engineer": "Production deployment and infrastructure (011)"
+        },
+        {
+            "test-automation": "Verify 100% test coverage across all lessons after implementation"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "project-manager",
+            "question": "Should lessons be implemented sequentially or can independent lessons (e.g., 02, 03, 04) be parallelized?"
+        },
+        {
+            "agent": "project-manager",
+            "question": "Is there a target timeline for completing all 10 lessons, or should we prioritize certain lessons first?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "Should each lesson include interactive examples or just executable code with tests?"
+        },
+        {
+            "agent": "documentation-writer",
+            "question": "Should we create video walkthroughs or screencasts for complex lessons (08, 09)?"
+        }
+    ]
+}
+```

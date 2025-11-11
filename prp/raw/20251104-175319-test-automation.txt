@@ -1,0 +1,309 @@
+I need to read the feature file first to understand what needs to be decomposed.
+
+```xml
+<read_file>
+<path>/home/thomas/Repositories/LangChangeWorkflows/prp/idea.md</path>
+</read_file>
+```
+
+Now I'll analyze this feature and decompose it into atomic tasks. This is a learning project to understand LangGraph fundamentals through building a PRP workflow system incrementally over 10 lessons.
+
+```json
+{
+    "agent": "project-manager",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Contains 10 distinct lessons with different learning objectives",
+            "Spans multiple architectural layers (workflow, state, routing, API integration)",
+            "Involves different complexity levels from basic to production-ready",
+            "Requires sequential learning path with dependencies between lessons"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "001",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 01 - Hello LangGraph with simplest 2-node workflow",
+            "affected_components": [
+                "lessons/01-hello-langgraph/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Two-node workflow (greet → farewell) executes successfully",
+                "State passes between nodes with message content",
+                "Graph compiles without errors",
+                "Example script demonstrates basic invocation",
+                "README documents what was learned"
+            ],
+            "risk": [
+                "First lesson must be extremely simple to avoid overwhelming learner",
+                "Need to avoid introducing too many concepts at once"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "002",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 02 - TypedDict state schema with complex state management",
+            "affected_components": [
+                "lessons/02-state-management/"
+            ],
+            "dependencies": [
+                "001"
+            ],
+            "acceptance": [
+                "TypedDict schema defines all required state fields",
+                "Workflow tracks gates_passed and gates_failed",
+                "State updates persist across multiple nodes",
+                "Example demonstrates state inspection at each step",
+                "README explains state management patterns"
+            ],
+            "risk": [
+                "State schema complexity could confuse learner if not well-explained"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "003",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 03 - Conditional routing with if/then decision logic",
+            "affected_components": [
+                "lessons/03-conditional-routing/"
+            ],
+            "dependencies": [
+                "002"
+            ],
+            "acceptance": [
+                "Conditional edges route based on state values",
+                "Success/failure paths implemented correctly",
+                "Route function demonstrates decision logic",
+                "Example shows multiple routing scenarios",
+                "README explains routing patterns"
+            ],
+            "risk": [
+                "Routing logic must be clear and demonstrate real-world use cases"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "004",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 04 - Retry patterns with 3-strike rule and failure handling",
+            "affected_components": [
+                "lessons/04-retry-patterns/"
+            ],
+            "dependencies": [
+                "003"
+            ],
+            "acceptance": [
+                "Retry counter tracks attempts per gate",
+                "3-strike rule triggers specialist consultation",
+                "Circuit breaker activates after 15 consecutive failures",
+                "Example demonstrates retry scenarios",
+                "README documents retry strategies"
+            ],
+            "risk": [
+                "Retry logic complexity could obscure learning if not well-structured"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "005",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 05 - Claude API integration from workflow nodes",
+            "affected_components": [
+                "lessons/05-claude-api/"
+            ],
+            "dependencies": [
+                "004"
+            ],
+            "acceptance": [
+                "Node successfully calls Claude API with proper authentication",
+                "Response integrated into workflow state",
+                "Error handling for API failures implemented",
+                "Example shows real API interaction",
+                "README documents API integration patterns"
+            ],
+            "risk": [
+                "API key management and error handling must be clear"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "006",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 06 - Multi-node workflows with validation gates",
+            "affected_components": [
+                "lessons/06-multi-node/"
+            ],
+            "dependencies": [
+                "005"
+            ],
+            "acceptance": [
+                "Workflow chains 3+ nodes with different responsibilities",
+                "Each gate has clear validation logic",
+                "State flows correctly through all nodes",
+                "Example demonstrates gate sequence",
+                "README explains multi-node patterns"
+            ],
+            "risk": [
+                "Complexity increase must be gradual and well-explained"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "007",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 07 - Cost optimization with context caching",
+            "affected_components": [
+                "lessons/07-cost-optimization/"
+            ],
+            "dependencies": [
+                "006"
+            ],
+            "acceptance": [
+                "Context optimizer reduces token usage by 40%+",
+                "Cache hits tracked in workflow state",
+                "Cost comparison demonstrates savings",
+                "Example shows before/after optimization",
+                "README documents caching strategies"
+            ],
+            "risk": [
+                "Must demonstrate measurable cost savings with real examples"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "008",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 08 - Multi-agent coordination with specialist consultation",
+            "affected_components": [
+                "lessons/08-multi-agent/"
+            ],
+            "dependencies": [
+                "007"
+            ],
+            "acceptance": [
+                "Multiple agents coordinate on single workflow",
+                "Specialist consultation triggered correctly",
+                "Agent responses integrated into state",
+                "Example shows agent interaction patterns",
+                "README documents coordination strategies"
+            ],
+            "risk": [
+                "Agent coordination complexity must not overwhelm core learning"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "009",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 09 - Complete PRP workflow with all 6 gates",
+            "affected_components": [
+                "lessons/09-complete-prp/"
+            ],
+            "dependencies": [
+                "008"
+            ],
+            "acceptance": [
+                "All 6 validation gates implemented and integrated",
+                "Complete workflow executes from start to finish",
+                "State management handles all gate results",
+                "Example demonstrates full PRP execution",
+                "README documents complete workflow architecture"
+            ],
+            "risk": [
+                "Integration of all components must be clean and maintainable"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "010",
+            "agent": "devops-engineer",
+            "objective": "Implement Lesson 10 - Production deployment and testing infrastructure",
+            "affected_components": [
+                "lessons/10-production/"
+            ],
+            "dependencies": [
+                "009"
+            ],
+            "acceptance": [
+                "Deployment scripts for global installation (~/.claude/langgraph/)",
+                "Testing infrastructure validates all lessons",
+                "Documentation covers production usage patterns",
+                "Example shows real project integration",
+                "README documents deployment and maintenance"
+            ],
+            "risk": [
+                "Deployment complexity must be minimized for learning project"
+            ],
+            "effort": "M"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "Lesson 01 implementation - simplest possible workflow to prove LangGraph basics"
+        },
+        {
+            "t-002": "Lesson 02 implementation - add state management complexity"
+        },
+        {
+            "t-003": "Lesson 03 implementation - add conditional routing logic"
+        },
+        {
+            "t-004": "Lesson 04 implementation - add retry patterns and failure handling"
+        },
+        {
+            "t-005": "Lesson 05 implementation - integrate Claude API calls"
+        },
+        {
+            "t-006": "Lesson 06 implementation - build multi-node workflows"
+        },
+        {
+            "t-007": "Lesson 07 implementation - optimize costs with caching"
+        },
+        {
+            "t-008": "Lesson 08 implementation - coordinate multiple agents"
+        },
+        {
+            "t-009": "Lesson 09 implementation - complete PRP workflow integration"
+        },
+        {
+            "t-010": "Lesson 10 implementation - production deployment and testing"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "python-developer": "All lesson implementations 01-09 require Python/LangGraph expertise"
+        },
+        {
+            "devops-engineer": "Lesson 10 deployment infrastructure and global installation"
+        },
+        {
+            "documentation-writer": "Cross-lesson documentation, learning guide updates, and architecture diagrams"
+        },
+        {
+            "test-automation": "Testing infrastructure for validating each lesson's learning objectives"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "project-manager",
+            "question": "Should each lesson be developed as a separate PRP, or should we group related lessons (e.g., 01-03 as foundations, 04-06 as intermediate, 07-09 as advanced)?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "Do you want each lesson to be completely standalone with its own mini-project, or should they build incrementally on a shared codebase?"
+        },
+        {
+            "agent": "documentation-writer",
+            "question": "Should we create a master LEARNING_GUIDE.md that ties all lessons together, or keep documentation per-lesson only?"
+        },
+        {
+            "agent": "test-automation",
+            "question": "Do you want automated tests that validate you've learned each lesson's concepts, or just example scripts that demonstrate usage?"
+        }
+    ]
+}
+```

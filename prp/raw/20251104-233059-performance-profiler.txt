@@ -1,0 +1,293 @@
+I'll analyze the feature and decompose it into atomic tasks. Let me first read the feature description.
+
+```json
+{
+    "agent": "performance-profiler",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature spans multiple architectural layers (state management, workflow orchestration, validation gates)",
+            "Involves 6 distinct validation gates that should be independent tasks",
+            "Requires coordination between multiple specialized components (context optimizer, agent coordinator, gate validators)",
+            "Dependencies between initialization, execution, and validation phases create natural task boundaries"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "001",
+            "agent": "python-developer",
+            "objective": "Implement PRPState TypedDict schema with all required fields for workflow state management",
+            "affected_components": [
+                "prp_langgraph/schemas/prp_state.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "PRPState TypedDict includes all 20+ fields from specification (workflow_id, gates_passed, gates_failed, cost_tracking, etc.)",
+                "ValidationResult TypedDict includes gate_id, passed, message, details, cost, tokens_used fields",
+                "All fields have correct type hints (List, Dict, Optional types)",
+                "Schema passes mypy type checking with no errors",
+                "Unit tests verify schema structure and field types"
+            ],
+            "risk": [
+                "Type definition changes require updates across multiple modules"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "002",
+            "agent": "python-developer",
+            "objective": "Create ContextOptimizer class for API call caching and cost reduction",
+            "affected_components": [
+                "prp_langgraph/optimizers/context_optimizer.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "ContextOptimizer caches agent prompts and file contents with cache keys",
+                "get_optimized_context() returns cached tokens for repeated calls",
+                "track_cost() accumulates costs per gate_id",
+                "Cache achieves 40%+ cost reduction on retry scenarios in tests",
+                "Integration test validates context reuse across 3 retry attempts"
+            ],
+            "risk": [
+                "Cache invalidation strategy must handle file changes correctly"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "003",
+            "agent": "python-developer",
+            "objective": "Build AgentCoordinator for multi-agent specialist consultation",
+            "affected_components": [
+                "prp_langgraph/coordinators/agent_coordinator.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "consult_specialist() loads specialist agent by gate_id mapping",
+                "Specialist consultation includes gate context and failure history",
+                "Returns structured recommendations with remediation steps",
+                "Handles missing specialist configurations gracefully",
+                "Unit tests verify specialist selection logic for all 6 gates"
+            ],
+            "risk": [
+                "Specialist agent availability depends on agent registry"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "004",
+            "agent": "test-automation",
+            "objective": "Implement Gate 2 coverage validation with pytest integration",
+            "affected_components": [
+                "prp_langgraph/gates/gate2_coverage.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "validate_coverage_gate() runs pytest --cov and parses coverage.json",
+                "Returns ValidationResult with passed=True only if coverage >= 100%",
+                "Includes detailed coverage breakdown by file in result details",
+                "Provides actionable suggestions for uncovered lines",
+                "Integration test validates against real project with <100% coverage"
+            ],
+            "risk": [
+                "Pytest execution depends on project test suite configuration"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "005",
+            "agent": "golang-developer",
+            "objective": "Create BasePRPWorkflow StateGraph with initialization and routing logic",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "001"
+            ],
+            "acceptance": [
+                "StateGraph initialized with PRPState schema",
+                "initialize_workflow node sets workflow_id and timestamps",
+                "route_gate_result() implements conditional routing (success/retry/circuit_breaker)",
+                "Workflow compiles without errors",
+                "Unit test verifies state transitions through initialization"
+            ],
+            "risk": [
+                "LangGraph API changes may require workflow refactoring"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "006",
+            "agent": "python-developer",
+            "objective": "Implement handle_failure node with 3-strike rule and circuit breaker",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "005"
+            ],
+            "acceptance": [
+                "handle_failure increments gates_failed[gate_id] retry counter",
+                "Consults specialist after 3 failures for same gate",
+                "Activates circuit_breaker_active after 15 consecutive_failures",
+                "Resets consecutive_failures counter on any gate success",
+                "Unit tests verify 3-strike rule and circuit breaker thresholds"
+            ],
+            "risk": [
+                "Incorrect counter logic could cause infinite retries"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "007",
+            "agent": "python-developer",
+            "objective": "Add Gate 2 coverage validation node to workflow graph",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "004",
+                "005"
+            ],
+            "acceptance": [
+                "gate_2_coverage node registered in workflow graph",
+                "Node calls validate_coverage_gate() with state and config",
+                "Conditional edges route to success/retry based on validation result",
+                "State updates include cost tracking and validation results",
+                "Integration test validates full gate execution and routing"
+            ],
+            "risk": [
+                "Node execution order must ensure proper state initialization"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "008",
+            "agent": "python-developer",
+            "objective": "Create workflow execution entry point with checkpointing support",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [
+                "005",
+                "006",
+                "007"
+            ],
+            "acceptance": [
+                "execute() method accepts prp_file and initial_state parameters",
+                "Workflow execution returns final PRPState with all tracking data",
+                "Checkpointing enabled when enable_checkpointing=True",
+                "resume() method restores workflow from checkpoint by workflow_id",
+                "Integration test validates checkpoint creation and resumption"
+            ],
+            "risk": [
+                "Checkpoint storage requires persistent backend configuration"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "009",
+            "agent": "documentation-writer",
+            "objective": "Create comprehensive README with architecture diagrams and usage examples",
+            "affected_components": [
+                "README.md",
+                "docs/architecture_diagrams.md"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "README includes quick start guide with code examples",
+                "Architecture diagrams show state flow through gates",
+                "Documents all 6 validation gates with pass/fail criteria",
+                "Includes cost optimization explanation with savings calculations",
+                "Provides troubleshooting guide for common issues"
+            ],
+            "risk": [
+                "Documentation must stay synchronized with code changes"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "010",
+            "agent": "test-automation",
+            "objective": "Build end-to-end integration test suite for complete workflow execution",
+            "affected_components": [
+                "tests/integration/test_full_workflow.py"
+            ],
+            "dependencies": [
+                "008"
+            ],
+            "acceptance": [
+                "Integration test executes workflow on real project with all gates",
+                "Test validates retry logic by forcing gate failures",
+                "Verifies cost tracking accuracy within 5% of expected values",
+                "Tests checkpoint creation and workflow resumption",
+                "Validates circuit breaker activation after 15 failures"
+            ],
+            "risk": [
+                "Test requires realistic project fixture with varied coverage"
+            ],
+            "effort": "L"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "Foundation: State schema and data structures (tasks 001)"
+        },
+        {
+            "t-002": "Optimization Layer: Context caching and agent coordination (tasks 002, 003)"
+        },
+        {
+            "t-003": "Gate Implementation: Coverage validation (task 004)"
+        },
+        {
+            "t-004": "Workflow Core: StateGraph initialization and routing (task 005)"
+        },
+        {
+            "t-005": "Failure Handling: Retry logic and circuit breaker (task 006)"
+        },
+        {
+            "t-006": "Integration: Wire gate into workflow (task 007)"
+        },
+        {
+            "t-007": "Execution Layer: Entry point and checkpointing (task 008)"
+        },
+        {
+            "t-008": "Documentation: User guides and architecture (task 009)"
+        },
+        {
+            "t-009": "Validation: End-to-end testing (task 010)"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "golang-developer": "Task 005 requires StateGraph implementation which may benefit from Go's concurrency patterns if workflow performance becomes critical"
+        },
+        {
+            "architect-reviewer": "Review overall workflow architecture before task 005 to validate state management approach and gate orchestration patterns"
+        },
+        {
+            "security-reviewer": "Review context caching implementation (task 002) to ensure no sensitive data leakage in cache keys"
+        },
+        {
+            "devops-engineer": "Consult on checkpoint storage backend selection (task 008) for production deployment requirements"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "python-developer",
+            "question": "Should the workflow support parallel gate execution or must gates run sequentially?"
+        },
+        {
+            "agent": "architect-reviewer",
+            "question": "What is the expected scale? (workflows/day, concurrent executions, checkpoint retention period)"
+        },
+        {
+            "agent": "security-reviewer",
+            "question": "Are there any sensitive project files that should be excluded from context caching?"
+        },
+        {
+            "agent": "test-automation",
+            "question": "Should the integration tests mock external dependencies (pytest, git) or require real project setup?"
+        }
+    ]
+}
+```

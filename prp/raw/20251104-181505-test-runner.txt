@@ -1,0 +1,214 @@
+I need to read the feature file first to understand what needs to be decomposed.
+
+```json
+{
+    "agent": "test-runner",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature involves multiple components: lessons structure, example implementations, documentation",
+            "Requires coordination between content creation, code examples, and testing infrastructure",
+            "Spans multiple learning modules that should be independent tasks",
+            "Documentation and code examples should be separate concerns"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "001",
+            "agent": "documentation-writer",
+            "objective": "Create lesson 01 structure and README with learning objectives",
+            "affected_components": [
+                "lessons/01-hello-langgraph/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Directory lessons/01-hello-langgraph/ exists with README.md",
+                "README contains concept, why-it-matters, and learning objectives sections",
+                "README includes prerequisites from lesson 00",
+                "README has clear success criteria for lesson completion",
+                "All markdown follows project formatting standards"
+            ],
+            "risk": [
+                "Content may need revision based on actual implementation complexity"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "002",
+            "agent": "python-developer",
+            "objective": "Implement minimal 2-node LangGraph workflow (greet->farewell)",
+            "affected_components": [
+                "lessons/01-hello-langgraph/hello_graph.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "hello_graph.py contains StateGraph with 2 nodes",
+                "Workflow accepts name input and produces greeting output",
+                "Code includes inline comments explaining LangGraph concepts",
+                "Script is executable with python3 hello_graph.py",
+                "All code follows PEP 8 style guidelines"
+            ],
+            "risk": [
+                "LangGraph API changes may require adjustments",
+                "Virtual environment dependencies must be properly configured"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "003",
+            "agent": "test-automation",
+            "objective": "Create pytest test suite for lesson 01 hello_graph",
+            "affected_components": [
+                "lessons/01-hello-langgraph/test_hello_graph.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "test_hello_graph.py contains at least 3 test cases",
+                "Tests verify greet node output format",
+                "Tests verify farewell node output format",
+                "All tests pass with pytest",
+                "Test coverage reaches 100% for hello_graph.py"
+            ],
+            "risk": [
+                "Test fixtures may need adjustment for LangGraph state handling"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "004",
+            "agent": "documentation-writer",
+            "objective": "Create lesson 01 CONCEPTS.md explaining StateGraph fundamentals",
+            "affected_components": [
+                "lessons/01-hello-langgraph/CONCEPTS.md"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "CONCEPTS.md explains StateGraph, nodes, and edges with examples",
+                "Document includes visual diagram of workflow structure",
+                "Key LangGraph terminology is defined clearly",
+                "Document references official LangGraph documentation",
+                "Includes common pitfalls and how to avoid them"
+            ],
+            "risk": [
+                "Concepts may be too advanced without lesson 00 context"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "005",
+            "agent": "documentation-writer",
+            "objective": "Create lesson 01 EXERCISES.md with extension challenges",
+            "affected_components": [
+                "lessons/01-hello-langgraph/EXERCISES.md"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "EXERCISES.md contains 3-5 progressive challenges",
+                "Each exercise has clear objective and acceptance criteria",
+                "Exercises build on hello_graph.py example",
+                "Difficulty increases from basic to advanced",
+                "Solutions hints provided without full implementation"
+            ],
+            "risk": [
+                "Exercises may be too difficult without additional lessons"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "006",
+            "agent": "documentation-writer",
+            "objective": "Update main README.md to mark lesson 01 as completed",
+            "affected_components": [
+                "README.md"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Lesson 01 checkbox is marked as completed",
+                "Current lesson pointer updated to lesson 02",
+                "Progress tracking section reflects new status",
+                "Last updated timestamp is current",
+                "No broken links in updated sections"
+            ],
+            "risk": [
+                "May need to update other documentation references"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "007",
+            "agent": "python-developer",
+            "objective": "Add requirements.txt entry for LangGraph dependencies",
+            "affected_components": [
+                "requirements.txt"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "langgraph package added with version pin",
+                "langchain-core dependency specified",
+                "All dependencies resolve without conflicts",
+                "pip install -r requirements.txt succeeds",
+                "Dependencies documented in lesson 00 setup guide"
+            ],
+            "risk": [
+                "Version conflicts with existing dependencies possible"
+            ],
+            "effort": "S"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "Documentation task - can proceed independently"
+        },
+        {
+            "t-002": "Core implementation - foundational for testing"
+        },
+        {
+            "t-003": "Testing task - validates implementation works"
+        },
+        {
+            "t-004": "Educational content - enhances understanding"
+        },
+        {
+            "t-005": "Practice exercises - reinforces learning"
+        },
+        {
+            "t-006": "Project tracking - administrative update"
+        },
+        {
+            "t-007": "Dependency management - infrastructure support"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "documentation-writer": "Handle all lesson documentation (001, 004, 005, 006)"
+        },
+        {
+            "python-developer": "Implement code examples and dependency management (002, 007)"
+        },
+        {
+            "test-automation": "Create comprehensive test coverage (003)"
+        },
+        {
+            "project-manager": "Coordinate lesson sequence and track completion"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "documentation-writer",
+            "question": "Should lesson 01 include comparison with traditional Python async patterns or focus purely on LangGraph concepts?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "Should hello_graph.py include error handling examples or keep it minimal for first lesson?"
+        },
+        {
+            "agent": "test-automation",
+            "question": "Should tests include integration tests with actual LangGraph compilation or only unit tests?"
+        },
+        {
+            "agent": "project-manager",
+            "question": "What is the target completion timeline for lesson 01 before moving to lesson 02?"
+        }
+    ]
+}
+```

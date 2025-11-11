@@ -1,0 +1,463 @@
+I need to read the feature file first to understand what needs to be decomposed.
+
+```json
+{
+    "agent": "project-manager",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature involves multiple learning lessons spanning different LangGraph concepts",
+            "Requires both documentation creation and code implementation across 10 lessons",
+            "Involves setup, core concepts, advanced patterns, and production deployment",
+            "Each lesson requires independent validation and testing"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "001",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 01 documentation for basic LangGraph workflow with 2-node hello/farewell example",
+            "affected_components": [
+                "lessons/01-hello-langgraph/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Documentation explains StateGraph, nodes, and edges concepts clearly",
+                "Includes working 2-node example code with comments",
+                "Provides step-by-step instructions for running the example",
+                "Contains reflection section with key takeaways",
+                "Includes optional extension challenges"
+            ],
+            "risk": [
+                "Documentation may be too complex for absolute beginners"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "002",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 01 executable example demonstrating basic StateGraph with greet and farewell nodes",
+            "affected_components": [
+                "lessons/01-hello-langgraph/example.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Script creates StateGraph with 2 nodes successfully",
+                "State flows from greet to farewell node correctly",
+                "Output demonstrates state passing between nodes",
+                "Code includes inline comments explaining each step",
+                "Script runs without errors using provided requirements.txt"
+            ],
+            "risk": [
+                "LangGraph API changes may break example"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "003",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 02 documentation for TypedDict state management with complex state schemas",
+            "affected_components": [
+                "lessons/02-state-management/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Explains TypedDict for state schema definition",
+                "Shows examples of complex state with multiple fields",
+                "Demonstrates state validation patterns",
+                "Includes best practices for state design",
+                "Contains working example and reflection section"
+            ],
+            "risk": [
+                "State management patterns may be too advanced after Lesson 01"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "004",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 03 documentation for conditional routing with decision logic examples",
+            "affected_components": [
+                "lessons/03-conditional-routing/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Explains conditional edges and routing functions",
+                "Shows how to implement if/then logic declaratively",
+                "Includes multiple routing scenarios",
+                "Demonstrates route_gate_result pattern",
+                "Contains practical examples and exercises"
+            ],
+            "risk": [
+                "Conditional routing concepts may require state management understanding"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "005",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 04 documentation for retry patterns with 3-strike rule implementation",
+            "affected_components": [
+                "lessons/04-retry-patterns/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Explains failure handling patterns in LangGraph",
+                "Demonstrates 3-strike retry rule implementation",
+                "Shows circuit breaker pattern integration",
+                "Includes specialist consultation after retries",
+                "Contains complete retry workflow example"
+            ],
+            "risk": [
+                "Retry logic depends on understanding conditional routing"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "006",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 05 documentation for Claude API integration in LangGraph nodes",
+            "affected_components": [
+                "lessons/05-claude-api/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Shows how to call Claude API from node functions",
+                "Demonstrates context caching for cost optimization",
+                "Includes error handling for API calls",
+                "Shows cost tracking implementation",
+                "Contains working Claude integration example"
+            ],
+            "risk": [
+                "Requires valid Anthropic API key for testing"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "007",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 06 documentation for multi-node workflows with validation gates",
+            "affected_components": [
+                "lessons/06-multi-node/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Explains how to connect multiple nodes in sequence",
+                "Shows validation gate pattern implementation",
+                "Demonstrates state flow through complex workflows",
+                "Includes 3+ node example workflow",
+                "Contains error propagation patterns"
+            ],
+            "risk": [
+                "Complex workflows may be overwhelming without prior lessons"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "008",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 07 documentation for cost optimization through caching strategies",
+            "affected_components": [
+                "lessons/07-cost-optimization/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Explains context caching mechanisms",
+                "Shows 40% cost reduction techniques",
+                "Demonstrates cache hit tracking",
+                "Includes cost comparison examples",
+                "Contains optimization best practices"
+            ],
+            "risk": [
+                "Cost optimization depends on Claude API integration knowledge"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "009",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 08 documentation for multi-agent coordination patterns",
+            "affected_components": [
+                "lessons/08-multi-agent/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Explains agent coordination architecture",
+                "Shows specialist consultation patterns",
+                "Demonstrates agent-to-agent communication",
+                "Includes parallel agent execution examples",
+                "Contains agent selection logic"
+            ],
+            "risk": [
+                "Multi-agent patterns require understanding of all previous lessons"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "010",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 09 documentation for complete PRP workflow implementation",
+            "affected_components": [
+                "lessons/09-complete-prp/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Combines all previous lessons into full PRP workflow",
+                "Shows 6 validation gates implementation",
+                "Demonstrates end-to-end workflow execution",
+                "Includes complete state management example",
+                "Contains troubleshooting guide"
+            ],
+            "risk": [
+                "Requires all previous lessons to be complete and tested"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "011",
+            "agent": "documentation-writer",
+            "objective": "Create Lesson 10 documentation for production deployment and monitoring",
+            "affected_components": [
+                "lessons/10-production/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Explains checkpointing and resumability",
+                "Shows production deployment patterns",
+                "Demonstrates monitoring and observability",
+                "Includes performance optimization techniques",
+                "Contains production readiness checklist"
+            ],
+            "risk": [
+                "Production deployment may require infrastructure knowledge"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "012",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 02 executable example demonstrating TypedDict state schemas",
+            "affected_components": [
+                "lessons/02-state-management/example.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Defines TypedDict schema with multiple field types",
+                "Demonstrates state validation in nodes",
+                "Shows state updates and transformations",
+                "Includes error handling for invalid state",
+                "Script executes successfully with sample data"
+            ],
+            "risk": [
+                "Complex state types may confuse beginners"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "013",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 03 executable example demonstrating conditional routing logic",
+            "affected_components": [
+                "lessons/03-conditional-routing/example.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Implements conditional edges with routing function",
+                "Shows branching logic based on state conditions",
+                "Demonstrates multiple routing paths",
+                "Includes clear routing decision output",
+                "Script handles all routing scenarios correctly"
+            ],
+            "risk": [
+                "Routing logic may be too abstract without concrete examples"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "014",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 04 executable example demonstrating retry patterns with circuit breaker",
+            "affected_components": [
+                "lessons/04-retry-patterns/example.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Implements 3-strike retry rule",
+                "Shows circuit breaker activation after 15 failures",
+                "Demonstrates specialist consultation pattern",
+                "Includes retry counter tracking",
+                "Script simulates various failure scenarios"
+            ],
+            "risk": [
+                "Complex retry logic may be difficult to test without real failures"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "015",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 05 executable example integrating Claude API with context caching",
+            "affected_components": [
+                "lessons/05-claude-api/example.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Makes successful API call to Claude from node",
+                "Implements context caching mechanism",
+                "Tracks API costs and cache hits",
+                "Handles API errors gracefully",
+                "Demonstrates cost savings through caching"
+            ],
+            "risk": [
+                "Requires API key configuration and may incur costs"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "016",
+            "agent": "test-automation",
+            "objective": "Create test suite for Lessons 01-05 validating core LangGraph concepts",
+            "affected_components": [
+                "lessons/tests/"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tests verify StateGraph creation and execution",
+                "Tests validate state management patterns",
+                "Tests check conditional routing behavior",
+                "Tests confirm retry logic correctness",
+                "All tests pass with 100% coverage of example code"
+            ],
+            "risk": [
+                "Testing async workflows may require special test utilities"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "017",
+            "agent": "python-developer",
+            "objective": "Update requirements.txt with all dependencies needed for 10 lessons",
+            "affected_components": [
+                "requirements.txt"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Includes langgraph with version pinning",
+                "Includes anthropic SDK for Claude API",
+                "Includes testing frameworks (pytest, coverage)",
+                "Includes all supporting libraries needed",
+                "Dependencies install without conflicts"
+            ],
+            "risk": [
+                "Version conflicts between dependencies"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "018",
+            "agent": "documentation-writer",
+            "objective": "Update main README.md with lesson progress tracking and quick start guide",
+            "affected_components": [
+                "README.md"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Lists all 10 lessons with checkboxes",
+                "Includes quick start instructions",
+                "Shows learning path progression",
+                "Links to each lesson directory",
+                "Contains prerequisites and setup steps"
+            ],
+            "risk": [
+                "README may become outdated as lessons are completed"
+            ],
+            "effort": "S"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "Documentation for Lesson 01 (basic workflow)"
+        },
+        {
+            "t-002": "Implementation for Lesson 01 (basic workflow)"
+        },
+        {
+            "t-003": "Documentation for Lesson 02 (state management)"
+        },
+        {
+            "t-004": "Documentation for Lesson 03 (conditional routing)"
+        },
+        {
+            "t-005": "Documentation for Lesson 04 (retry patterns)"
+        },
+        {
+            "t-006": "Documentation for Lesson 05 (Claude API)"
+        },
+        {
+            "t-007": "Documentation for Lesson 06 (multi-node workflows)"
+        },
+        {
+            "t-008": "Documentation for Lesson 07 (cost optimization)"
+        },
+        {
+            "t-009": "Documentation for Lesson 08 (multi-agent coordination)"
+        },
+        {
+            "t-010": "Documentation for Lesson 09 (complete PRP workflow)"
+        },
+        {
+            "t-011": "Documentation for Lesson 10 (production deployment)"
+        },
+        {
+            "t-012": "Implementation for Lesson 02 (state management)"
+        },
+        {
+            "t-013": "Implementation for Lesson 03 (conditional routing)"
+        },
+        {
+            "t-014": "Implementation for Lesson 04 (retry patterns)"
+        },
+        {
+            "t-015": "Implementation for Lesson 05 (Claude API)"
+        },
+        {
+            "t-016": "Test suite for Lessons 01-05"
+        },
+        {
+            "t-017": "Update requirements.txt"
+        },
+        {
+            "t-018": "Update README.md with progress tracking"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "documentation-writer": "Create all lesson documentation (tasks 001, 003-011, 018)"
+        },
+        {
+            "python-developer": "Implement all lesson examples and update dependencies (tasks 002, 012-015, 017)"
+        },
+        {
+            "test-automation": "Create comprehensive test suite for lesson examples (task 016)"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "project-manager",
+            "question": "Should lessons 06-10 implementation tasks be created now or deferred until lessons 01-05 are validated?"
+        },
+        {
+            "agent": "project-manager",
+            "question": "Is there a preferred order for completing lessons (sequential vs parallel documentation/implementation)?"
+        },
+        {
+            "agent": "project-manager",
+            "question": "Should each lesson have its own test file or consolidated test suite?"
+        },
+        {
+            "agent": "project-manager",
+            "question": "Do you want interactive examples (CLI prompts) or fully automated scripts for each lesson?"
+        }
+    ]
+}
+```

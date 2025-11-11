@@ -1,0 +1,291 @@
+I need to read the feature file first to understand what needs to be decomposed.
+
+```
+<read_file>
+<path>/home/thomas/Repositories/LangChangeWorkflows/prp/idea.md</path>
+</read_file>
+```
+
+Now I'll analyze this feature and decompose it into atomic tasks following the template structure.
+
+```json
+{
+    "agent": "python-developer",
+    "atomicity": {
+        "is_atomic": false,
+        "reasons": [
+            "Feature spans multiple lessons (01-10) requiring sequential implementation",
+            "Involves multiple components: state management, routing, retry logic, API integration",
+            "Cross-cutting concerns: cost tracking, checkpointing, visualization",
+            "Complex workflow orchestration requiring coordination across multiple nodes"
+        ]
+    },
+    "proposed_tasks": [
+        {
+            "id": "001",
+            "agent": "python-developer",
+            "objective": "Implement Lesson 01 hello workflow with 2-node graph (greet → farewell)",
+            "affected_components": [
+                "lessons/01-hello-langgraph/hello_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "StateGraph created with 2 nodes: greet_node and farewell_node",
+                "Simple state dict flows from greet to farewell",
+                "Workflow compiles and executes successfully",
+                "Example output shows both nodes executing in sequence",
+                "100% test coverage for hello workflow"
+            ],
+            "risk": [
+                "First LangGraph implementation - learning curve may slow development"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "002",
+            "agent": "python-developer",
+            "objective": "Create TypedDict schema for PRPState with all required fields",
+            "affected_components": [
+                "prp_langgraph/schemas/prp_state.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "PRPState TypedDict defines all fields: workflow_id, gates_passed, gates_failed, etc.",
+                "Type hints are correct and validated",
+                "Schema includes cost_tracking, timestamps, and failure tracking",
+                "Documentation explains each field's purpose",
+                "100% test coverage for state schema"
+            ],
+            "risk": [
+                "Schema changes later may require migration logic"
+            ],
+            "effort": "S"
+        },
+        {
+            "id": "003",
+            "agent": "python-developer",
+            "objective": "Implement conditional routing logic with route_gate_result function",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "route_gate_result function returns 'success', 'retry', or 'circuit_breaker'",
+                "Routing logic checks passed/failed status correctly",
+                "Circuit breaker activates after 15 consecutive failures",
+                "Conditional edges connect nodes based on routing decisions",
+                "100% test coverage for routing logic"
+            ],
+            "risk": [
+                "Complex conditional logic may have edge cases"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "004",
+            "agent": "python-developer",
+            "objective": "Implement handle_failure node with 3-strike retry logic",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tracks retry count per gate in state['gates_failed']",
+                "After 3 failures, consults specialist agent automatically",
+                "Updates consecutive_failures counter correctly",
+                "Triggers circuit breaker at 15 consecutive failures",
+                "100% test coverage for failure handling"
+            ],
+            "risk": [
+                "Retry logic must not create infinite loops"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "005",
+            "agent": "python-developer",
+            "objective": "Integrate Anthropic Claude API with context caching in gate validation",
+            "affected_components": [
+                "prp_langgraph/integrations/claude_api.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Claude API client initialized with API key from environment",
+                "Context caching implemented for agent prompts (40% cost savings)",
+                "API calls track tokens_used and cost in state",
+                "Error handling for API failures with exponential backoff",
+                "100% test coverage with mocked API responses"
+            ],
+            "risk": [
+                "API rate limits may cause failures",
+                "Context caching requires careful prompt management"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "006",
+            "agent": "python-developer",
+            "objective": "Implement Gate 2 coverage validation node",
+            "affected_components": [
+                "prp_langgraph/gates/gate2_coverage.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Runs pytest with coverage flags and parses JSON output",
+                "Validates coverage >= 100% for lines, branches, functions, statements",
+                "Returns ValidationResult with passed/failed status and details",
+                "Tracks cost and tokens_used in result",
+                "100% test coverage for gate validation logic"
+            ],
+            "risk": [
+                "Coverage tool variations across projects"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "007",
+            "agent": "python-developer",
+            "objective": "Implement checkpointing system for workflow resumability",
+            "affected_components": [
+                "prp_langgraph/checkpointing/checkpoint_manager.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "State saved to disk at each node transition",
+                "Workflow can resume from last checkpoint after crash",
+                "Checkpoint files include workflow_id and timestamp",
+                "Old checkpoints cleaned up after successful completion",
+                "100% test coverage for checkpointing logic"
+            ],
+            "risk": [
+                "Disk I/O overhead may slow workflow execution"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "008",
+            "agent": "python-developer",
+            "objective": "Implement cost tracking and optimization system",
+            "affected_components": [
+                "prp_langgraph/optimization/cost_tracker.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Tracks API calls, tokens_used, cache_hits per gate",
+                "Calculates total cost using Anthropic pricing model",
+                "Provides cost breakdown by gate in final report",
+                "Context optimizer reduces token usage by 40% on retries",
+                "100% test coverage for cost tracking"
+            ],
+            "risk": [
+                "Pricing model changes may require updates"
+            ],
+            "effort": "M"
+        },
+        {
+            "id": "009",
+            "agent": "python-developer",
+            "objective": "Implement multi-agent coordination with specialist consultation",
+            "affected_components": [
+                "prp_langgraph/coordination/agent_coordinator.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Agent registry loaded from task-agent-registry.json",
+                "Specialist consultation triggered after 3 gate failures",
+                "Specialist recommendations added to state",
+                "Context optimizer shares cached context with specialists",
+                "100% test coverage for agent coordination"
+            ],
+            "risk": [
+                "Agent registry must stay synchronized with available agents"
+            ],
+            "effort": "L"
+        },
+        {
+            "id": "010",
+            "agent": "python-developer",
+            "objective": "Create BasePRPWorkflow class integrating all components",
+            "affected_components": [
+                "prp_langgraph/workflows/base_prp_workflow.py"
+            ],
+            "dependencies": [],
+            "acceptance": [
+                "Workflow initializes all gates, routing, and failure handling",
+                "Execute method runs complete workflow from PRP file to final result",
+                "State flows correctly through all nodes with proper updates",
+                "Final result includes gates_passed, cost_tracking, and workflow_status",
+                "100% test coverage for end-to-end workflow"
+            ],
+            "risk": [
+                "Integration complexity may reveal unexpected interactions between components"
+            ],
+            "effort": "L"
+        }
+    ],
+    "split_recommendation": [
+        {
+            "t-001": "Lesson 01 hello workflow - Foundational learning, no dependencies"
+        },
+        {
+            "t-002": "PRPState schema - Required by all subsequent tasks"
+        },
+        {
+            "t-003": "Conditional routing - Core workflow orchestration logic"
+        },
+        {
+            "t-004": "Retry logic - Failure handling mechanism"
+        },
+        {
+            "t-005": "Claude API integration - External service integration"
+        },
+        {
+            "t-006": "Gate 2 implementation - First concrete validation gate"
+        },
+        {
+            "t-007": "Checkpointing - Workflow persistence layer"
+        },
+        {
+            "t-008": "Cost tracking - Monitoring and optimization"
+        },
+        {
+            "t-009": "Multi-agent coordination - Advanced orchestration"
+        },
+        {
+            "t-010": "BasePRPWorkflow integration - Final assembly"
+        }
+    ],
+    "delegation_suggestions": [
+        {
+            "test-automation": "End-to-end testing of complete workflow with all gates"
+        },
+        {
+            "documentation-writer": "Create comprehensive learning guide and API documentation"
+        },
+        {
+            "security-reviewer": "Review API key handling and context caching security"
+        },
+        {
+            "performance-profiler": "Validate 40% cost savings claim with benchmarks"
+        }
+    ],
+    "Questions": [
+        {
+            "agent": "python-developer",
+            "question": "Should we implement all 6 gates (TDD, coverage, mocks, mutation, security, production-ready) or start with just Gate 2 coverage?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "What is the target environment for deployment (local dev, CI/CD pipeline, cloud function)?"
+        },
+        {
+            "agent": "python-developer",
+            "question": "Should checkpointing use filesystem, database, or in-memory storage?"
+        },
+        {
+            "agent": "architect-reviewer",
+            "question": "Is the 10-lesson incremental approach the required delivery schedule, or can we consolidate lessons?"
+        }
+    ]
+}
+```
