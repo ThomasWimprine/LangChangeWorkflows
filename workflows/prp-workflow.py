@@ -35,11 +35,18 @@ Future work (intent):
 # Imports
 # ----------------------------
 
-from asyncio.log import logger
+import logging
 from typing import TypedDict, Optional, Any, List, Dict
 from pathlib import Path
 from datetime import datetime, UTC
-import argparse, logging, os, json, time, random, hashlib, base64
+import argparse, os, json, time, random, hashlib, base64
+
+# Set up module logger
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 import warnings
 
@@ -56,7 +63,7 @@ from dotenv import load_dotenv, find_dotenv
 # LangGraph v1
 from langgraph.graph import StateGraph, START, END
 
-# LangChain v1 imports (no "classic")
+# LangChain v1 imports (using langchain_classic for caching)
 from langchain_classic.embeddings import CacheBackedEmbeddings
 from langchain_classic.storage import LocalFileStore
 from langchain_openai import OpenAIEmbeddings
@@ -80,7 +87,8 @@ BASE_AGENTS = [  # Baseline agent roster for upcoming draft-review subgraph
     "devops-engineer",
     "gcp-architect",
     "documentation-writer",
-    "systems-architect",
+    "system-architect",
+    "application-architect"
 ]
 
 AGENT_DIRS = [Path(os.path.expanduser("~/.claude/agents"))]  # Default agent bundle path
@@ -187,6 +195,10 @@ class PRPState(TypedDict, total=False):
     embedding_dim: int
     doc_embedding_model: str
     doc_embedding_dim: int
+    # Draft-phase surfaced fields (optional)
+    batch_id: str
+    responses: List[Any]
+    review_comments: List[Dict[str, Any]]
 
 
 # ----------------------------
@@ -221,6 +233,9 @@ class PRPDraftState(TypedDict, total=False):
     model: str
     max_iterations: int
     agents: List[str]
+    # Batch processing fields
+    batch_requests: List[Any]
+    responses: List[Any]
     # Context pools (immutable copies from PRPState)
     project_context: List[str]
     project_context_embeddings: List[List[float]]
@@ -240,6 +255,10 @@ class PRPDraftState(TypedDict, total=False):
     embedding_dim: int
     doc_embedding_model: str
     doc_embedding_dim: int
+    # Derived artifacts
+    proposed_tasks: List[Dict[str, Any]]
+    batch_id: str
+    batch: List[Any]
 
 
 # ----------------------------
@@ -375,10 +394,10 @@ def _read_directory_recursive(dir_path: Path, extensions: set,
         try:
             content = file_path.read_text(encoding='utf-8', errors='replace')
 
-            # Skip if too large (>50K chars per file)
-            # if len(content) > 50000:
-            #     logger.debug(f"Skipping large file: {file_path} ({len(content)} chars)")
-            #     continue
+            # Skip if too large (>50K chars per file to prevent OOM)
+            if len(content) > 50000:
+                logger.debug(f"Skipping large file: {file_path} ({len(content)} chars)")
+                continue
 
             # Skip empty files
             if not content.strip():
@@ -389,10 +408,11 @@ def _read_directory_recursive(dir_path: Path, extensions: set,
             separator = f"=== {rel_path} ==="
             entry_size = len(separator) + len(content) + 4  # +4 for newlines
 
-            # Check if we have budget
-            # if chars_read + entry_size > max_remaining:
-            #     logger.warning(f"Context limit reached at {rel_path}")
-            #     break
+            # Check if we have budget (5MB total context limit to prevent OOM)
+            max_context_size = 5_000_000  # 5MB
+            if chars_read + entry_size > max_context_size:
+                logger.warning(f"Context size limit ({max_context_size:,} chars) reached at {rel_path}")
+                break
 
             # Add to context
             content_parts.append(f"{separator}\n{content}")
@@ -674,7 +694,7 @@ def draft_prp_child_graph(state: PRPState) -> PRPState:
         **state
     }
 
-def load_prp(draft_state: PRPDraftState) -> PRPDraftState:
+def load_prp(state: PRPDraftState) -> PRPDraftState:
     """Prototype for draft-phase loader (non-node helper).
 
     This function demonstrates how a future glue node might translate from
@@ -683,8 +703,7 @@ def load_prp(draft_state: PRPDraftState) -> PRPDraftState:
     the one-parameter state contract.
     """
 
-    parentState: PRPState = draft_state  # type: ignore
-    input_file = parentState.get("prp_draft_file", "")
+    input_file = state.get("prp_draft_file", "")
     path = Path(input_file)
     if not path.exists():
         raise FileNotFoundError(f"Input file {input_file} not found.")
@@ -695,49 +714,188 @@ def load_prp(draft_state: PRPDraftState) -> PRPDraftState:
     embeddings = node_embed(chunks)
 
     return {
-        **draft_state,
+        **state,
         "chunks": chunks,
         "chunk_embeddings": embeddings,
     }
 
-def submit_draft_prp(draft_state: PRPDraftState) -> PRPDraftState:
+def submit_draft_prp(state: PRPDraftState) -> PRPDraftState:
     """Submit the draft PRP to the Claude API in batch mode.
 
     Responsibilities:
       - Construct and send batch requests to the Claude API using the draft state.
       - Handle responses and update the draft state accordingly.
       - Return the updated draft state.
+
+    TODO (Production): Implement retry logic with exponential backoff for transient failures
+      Reference: https://docs.anthropic.com/en/docs/build-with-claude/batch-processing
     """
-    # Placeholder: real batch submission logic will go here.
-    # For now, just return the draft_state unchanged.
-    return draft_state
 
+    batch_requests = state.get("batch_requests", [])
 
-def build_batch_requests(draft_state: PRPDraftState) -> List[MessageCreateParamsNonStreaming]:
+    # Validate we have requests to submit
+    if not batch_requests:
+        logger.warning("No batch requests to submit - batch_requests is empty")
+        return {**state, "status": "no-requests"}
+
+    logger.info(f"Submitting batch with {len(batch_requests)} requests to Anthropic API")
+
+    try:
+        client = anthropic.Anthropic()  # Uses ANTHROPIC_API_KEY from environment
+
+        message_batch = client.messages.batches.create(
+            requests=batch_requests
+        )
+
+        batch_id = message_batch.id
+        logger.info(f"Batch submitted successfully - batch_id: {batch_id}")
+
+        return {**state, "status": "batch-submitted", "batch_id": batch_id}
+
+    except Exception as e:
+        logger.error(f"Failed to submit batch to Anthropic API: {e}")
+        return {**state, "status": "batch-failed", "error": str(e)}
+
+def build_batch_requests(state: PRPDraftState) -> PRPDraftState:
     """Build batch requests for the Claude API based on the draft state.
 
     This function constructs the necessary request payloads for batch processing.
+
+    TODO (Production): Implement full agent-specific prompt construction with:
+    - Retrieved context from similarity search
+    - Agent-specific system prompts
+    - Structured output schemas
+    - Error handling for missing agents
     """
 
     template = _load_template()
-    requests: List[MessageCreateParamsNonStreaming] = []
+    prp_prompt = _load_prp_prompt()
+    agent_catalog = _build_agent_catalog()
 
-    # Example: Create a single request using the draft chunks
-    user_message = {
-        "role": "user",
-        "content": "\n\n".join(draft_state.get("chunks", []))
-    }
+    # Use simple dicts for stubbed requests to avoid strict type coupling.
+    requests: List[Dict[str, Any]] = []
 
-    request = MessageCreateParamsNonStreaming(
-        model=MODEL_ID,
-        messages=[user_message],
-        max_tokens_to_sample=65000,
-        temperature=0.9,
-    )
+    # Build requests for each agent
+    for agent_name in sorted(state.get("agents", [])):
+        try:
+            agent_text = load_agent_text(agent_name)
+            logger.debug("Loaded agent '%s' text (%d chars)", agent_name, len(agent_text))
 
-    requests.append(request)
+            # Construct system prompt with agent context, template, and available agents
+            system_prompt = f"""You are {agent_name}.
 
-    return requests
+{agent_text[:2000]}  # Truncate to keep under token limits
+
+Available Agents for Delegation:
+{agent_catalog}
+
+Task Decomposition Template:
+{template}
+
+{prp_prompt}
+"""
+
+            # Construct user message with draft content
+            user_content = "\n\n".join(state.get("chunks", []))
+            user_message = _panel_user_instruction(user_content)
+
+            # Build API request
+            request = {
+                "custom_id": f"{agent_name}-{short_hash(user_content[:100])}",
+                "params": {
+                    "model": MODEL_ID,
+                    "messages": [{"role": "user", "content": user_message}],
+                    "system": system_prompt,
+                    "temperature": 0.9,
+                    "max_tokens": 40960
+                }
+            }
+            requests.append(request)
+
+        except FileNotFoundError:
+            logger.warning("Agent text for '%s' not found; skipping.", agent_name)
+            continue
+        except Exception as e:
+            logger.error("Error building request for agent '%s': %s", agent_name, e)
+            continue
+
+    logger.info("Built %d batch requests for agents: %s", len(requests), ", ".join(state.get("agents", [])))
+    return {**state, "batch_requests": requests}
+
+def retrieve_claude_batch(state: PRPDraftState) -> PRPDraftState:
+    """Retrieve completed batch results from Claude API.
+
+    In a real implementation, this would poll the provider for completion
+    using state["batch_id"].
+
+    TODO (Production): Implement batch result polling:
+      1. Use batch_id to check status with client.messages.batches.retrieve()
+      2. Poll with exponential backoff until status is 'ended'
+      3. Download results using results_url from batch response
+      4. Parse JSONL results into response objects
+      5. Handle partial failures and individual request errors
+      6. Add timeout and maximum poll attempts
+      Reference: https://docs.anthropic.com/en/docs/build-with-claude/batch-processing
+    """
+    # Stub: Return immediately if already has responses
+    if state.get("responses"):
+        return state
+
+    # Stub: Generate placeholder responses for testing
+    batch_id = state.get("batch_id", "unknown")
+    num_requests = len(state.get("batch_requests", []))
+    placeholder = [{"status": "ok", "result": "stubbed-response"} for _ in range(num_requests)]
+
+    logger.info("STUB: Simulating batch retrieval for batch_id=%s with %d responses", batch_id, num_requests)
+    logger.warning("TODO: Replace stub with real Anthropic Batch API polling")
+
+    return {**state, "responses": placeholder, "status": "batch-completed"}
+
+def process_draft_responses(state: PRPDraftState) -> PRPDraftState:
+    """Process batch responses into structured review comments and proposed tasks.
+
+    TODO (Production): Implement full response processing:
+      1. Parse each response's content (JSON with proposed_tasks, atomicity, delegation_suggestions)
+      2. Extract proposed_tasks from each agent's response
+      3. Aggregate delegation_suggestions across all agents
+      4. Identify conflicts and overlaps in task decompositions
+      5. Build unified proposed_tasks list with agent attribution
+      6. Generate review_comments with agent feedback and concerns
+      7. Handle malformed JSON responses gracefully
+      8. Score task quality (atomicity, completeness, testability)
+    """
+    # Stub: Minimal processing for testing
+    responses = state.get("responses", []) or []
+    comments = state.get("review_comments", []) or []
+
+    if not comments and responses:
+        comments = [{"agent": "system", "note": f"Processed {len(responses)} responses."}]
+        logger.info("STUB: Processed %d responses into placeholder comments", len(responses))
+        logger.warning("TODO: Replace stub with real JSON parsing and task aggregation")
+
+    return {**state, "review_comments": comments}
+
+def draft_agent_feedback_loop(state: PRPDraftState) -> PRPDraftState:
+    """Agent feedback iteration loop for refining task decomposition.
+
+    TODO (Production): Implement multi-iteration feedback refinement:
+      1. Check delegation_suggestions to identify additional required agents
+      2. Load suggested agents and construct new batch requests
+      3. Re-run batch submission and retrieval for new agents
+      4. Merge new responses with existing proposed_tasks
+      5. Track iteration count against max_iterations limit
+      6. Implement convergence detection (no new delegations suggested)
+      7. Add circuit breaker for excessive iteration
+      8. Generate final consolidated task list across all iterations
+      9. Score final task decomposition quality
+     10. Update prp_draft_file with refined content
+    """
+    # Stub: No-op for testing - just pass through
+    current_status = state.get("status", "draft-processed")
+    logger.info("STUB: Agent feedback loop - no-op, status=%s", current_status)
+    logger.warning("TODO: Replace stub with multi-iteration agent feedback refinement")
+
+    return {**state, "status": current_status}
 
 # Main Graph
 def initialize_node(state: PRPState) -> PRPState:
@@ -750,12 +908,13 @@ def initialize_node(state: PRPState) -> PRPState:
       - Return a state update with populated project_context and global_context.
     """
 
-    logging.info("Initializing PRP workflow at %s", state.get("timestamp", "unknown time"))
+    logger.info("Initializing PRP workflow at %s", state.get("timestamp", "unknown time"))
 
     # Load repo-level CLAUDE.md if present
-    path = Path(state["CLAUDE.md"] if "CLAUDE.md" in state else PROJECT_ROOT / "CLAUDE.md")
+    claude_md_path = state.get("CLAUDE.md", PROJECT_ROOT / "CLAUDE.md")
+    path = Path(claude_md_path) if isinstance(claude_md_path, str) else claude_md_path
     project_content_path = path.read_text(encoding="utf-8").strip() if path.exists() else ""
-    project_context = load_and_chunk(project_content_path)
+    project_context = load_and_chunk(project_content_path) if project_content_path else []
 
     # Load global context if present
     global_context_path = Path.home() / ".claude" / "CLAUDE.md"
@@ -830,7 +989,7 @@ def load_docs(state: PRPState) -> PRPState:
                     except Exception:
                         rel = str(input_path)
                     file_entries.append((rel, txt))
-                    print(f"Loaded {rel} ({len(txt)} chars)")
+                    logger.debug("Loaded input file: %s (%d chars)", rel, len(txt))
             except Exception:
                 pass
 
@@ -849,7 +1008,7 @@ def load_docs(state: PRPState) -> PRPState:
                     continue
                 rel = str(fp.relative_to(PROJECT_ROOT))
                 file_entries.append((rel, txt))
-                print(f"Loaded {rel} ({len(txt)} chars)")
+                logger.debug("Loaded file: %s (%d chars)", rel, len(txt))
 
     docs = splitter.create_documents(
         [text for _, text in file_entries],
@@ -902,15 +1061,21 @@ def run_draft_phase(state: PRPState) -> PRPState:
         "embedding_dim": state.get("embedding_dim", 0),
         "doc_embedding_model": state.get("doc_embedding_model", ""),
         "doc_embedding_dim": state.get("doc_embedding_dim", 0),
+        "model": MODEL_ID,
+        "agents": BASE_AGENTS
     }
 
     draft_workflow = build_draft_subgraph()
     draft_result: PRPDraftState = draft_workflow.invoke(draft_state)
 
     # Merge any draft artifacts you want back into PRPState
-    merged = {
+    merged : PRPState = {
         **state,
         "draft_files": state.get("draft_files", []),
+        "status": draft_result.get("status", "batch-processed"),
+        "responses": draft_result.get("responses", []),
+        "review_comments": draft_result.get("review_comments", []),
+        
         # Add any material you decide to surface, e.g. 'proposed_tasks'
     }
     return merged
@@ -947,12 +1112,19 @@ def build_draft_subgraph() -> Any:
     graph.add_node("initialize", load_prp)
     graph.add_node("build_batch_requests", build_batch_requests)
     graph.add_node("submit_draft_prp", submit_draft_prp)
+    graph.add_node("retrieve_responses", retrieve_claude_batch)
+    graph.add_node("process_responses", process_draft_responses)
+    graph.add_node("agent_feedback_loop", draft_agent_feedback_loop) # Takes agent suggestions and runs feedback iterations
+
     
 
     graph.add_edge(START, "initialize")
     graph.add_edge("initialize", "build_batch_requests")
     graph.add_edge("build_batch_requests", "submit_draft_prp")
-    graph.add_edge("submit_draft_prp", END)
+    graph.add_edge("submit_draft_prp", "retrieve_responses")
+    graph.add_edge("retrieve_responses", "process_responses")
+    graph.add_edge("process_responses", "agent_feedback_loop")
+    graph.add_edge("agent_feedback_loop", END)
 
     return graph.compile()
 
@@ -979,6 +1151,23 @@ def main() -> int:
         help="Path to the input JSON or text file containing draft responses or source content.",
     )
     args = parser.parse_args()
+
+    # Validate input file exists and is readable
+    input_path = Path(args.input_file)
+    if not input_path.exists():
+        logger.error("Input file does not exist: %s", input_path)
+        return 1
+    if not input_path.is_file():
+        logger.error("Input path is not a file: %s", input_path)
+        return 1
+    try:
+        # Test readability
+        _ = input_path.read_text(encoding="utf-8")
+    except Exception as e:
+        logger.error("Cannot read input file %s: %s", input_path, e)
+        return 1
+
+    logger.info("Starting PRP workflow with input file: %s", input_path)
 
     workflow = build_workflow()
 

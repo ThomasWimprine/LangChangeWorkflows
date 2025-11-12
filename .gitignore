@@ -68,3 +68,5 @@ prp/drafts/*.json
 prp/active/*.json
 archive/
 .emb_cache/*
+result.json
+logs/*

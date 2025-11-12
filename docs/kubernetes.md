@@ -1,0 +1,2 @@
+# Deployment on Kubernetes
+- ArgoCD
