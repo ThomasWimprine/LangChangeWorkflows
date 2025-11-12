@@ -67,3 +67,4 @@ temp/
 prp/drafts/*.json
 prp/active/*.json
 archive/
+.emb_cache/*

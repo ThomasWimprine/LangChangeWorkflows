@@ -31,11 +31,15 @@ Future work (intent):
     - Expand state schemas with explicit fields for draft artifacts and final deliverables.
 """
 
+# ----------------------------
+# Imports
+# ----------------------------
+
 from asyncio.log import logger
 from typing import TypedDict, Optional, Any, List, Dict
 from pathlib import Path
 from datetime import datetime, UTC
-import argparse, logging, os, json, time, random
+import argparse, logging, os, json, time, random, hashlib, base64
 
 import warnings
 
@@ -57,6 +61,9 @@ from langchain_classic.embeddings import CacheBackedEmbeddings
 from langchain_classic.storage import LocalFileStore
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+import anthropic
+from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
+from anthropic.types.messages.batch_create_params import Request
 
 # ----------------------------
 # Config / globals
@@ -98,74 +105,152 @@ splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=80)
 EMB_CACHE_DIR = PROJECT_ROOT / ".emb_cache"
 EMB_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+# Text file extensions for context gathering
+TEXT_EXTENSIONS = {
+    # Documentation
+    '.md', '.txt', '.rst', '.adoc',
+    # Config/Data
+    '.yaml', '.yml', '.json', '.toml', '.ini', '.conf', '.cfg',
+    # Code
+    '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs', '.java',
+    '.c', '.cpp', '.h', '.hpp', '.cs', '.rb', '.php', '.sh', '.bash',
+    '.tf', '.tfvars', '.hcl',  # Terraform
+    '.sql', '.graphql', '.proto',  # Data/API
+    '.html', '.css', '.scss', '.sass', '.less',  # Web
+    '.xml', '.svg',
+    # Special files (no extension)
+    '.gitignore', '.dockerignore', 'Dockerfile', 'Makefile',
+    '.env.example'
+}
+
+# Directories and patterns to exclude
+EXCLUDE_DIRS = {
+    'node_modules', '__pycache__', '.git', '.svn', '.hg',
+    'venv', 'env', '.venv', '.env',
+    'dist', 'build', 'target', 'out', '.next', '.nuxt',
+    '.terraform', 'terraform.tfstate.d',
+    'coverage', '.pytest_cache', '.mypy_cache',
+    'vendor', 'Pods',
+    '.idea', '.vscode', '.vs'
+}
+
+EXCLUDE_PATTERNS = [
+    '*.pyc', '*.pyo', '*.so', '*.dylib', '*.dll', '*.exe',
+    '*.class', '*.jar', '*.war',
+    '*.min.js', '*.min.css',  # Minified files
+    '*.lock', 'package-lock.json', 'yarn.lock', 'poetry.lock',
+    '.DS_Store', 'Thumbs.db',
+    '*.log', '*.tmp', '*.temp', '*.swp', '*.swo'
+]
+
 # ----------------------------
 # State definition for LangGraph
 # ----------------------------
 class PRPState(TypedDict, total=False):
-        """Top-level workflow state (single schema for the main graph).
+    """Top-level workflow state (single schema for the main graph).
 
-        Notes:
-            - total=False allows us to gradually add fields without having to specify
-                all of them upfront. Be mindful to document any dynamically-added keys.
-            - All nodes in the main graph must accept and return this state shape.
+    Notes:
+        - total=False allows us to gradually add fields without having to specify
+          all of them upfront. Be mindful to document any dynamically-added keys.
+        - All nodes in the main graph must accept and return this state shape.
 
-        Fields:
-            project_context: Text chunks derived from repo-level CLAUDE.md (if present).
-            global_context: Text chunks derived from user-level ~/.claude/CLAUDE.md (if present).
-            timestamp: ISO-like UTC timestamp used for logging and result grouping.
-            chunks: Content chunks from the primary input (e.g., PRP draft content), ready for embedding.
-            chunk_embeddings: Vector representations corresponding to 'chunks'.
-            input_file: (optional) Path to the primary input file for this run.
-            draft_files: (optional) Collection of draft-related files accumulated during the run.
-        """
-        project_context: List[str]
-        global_context: List[str]
-        timestamp: str
-        chunks: List[str]
-        chunk_embeddings: List[List[float]]
-        # Optional, commonly used keys in this workflow:
-        input_file: str  # Path to primary input file for this run
-        draft_files: List[str]  # Collected draft artifact paths
-        docs: List[List[float]]
+    Fields:
+        project_context: Text chunks derived from repo-level CLAUDE.md (if present).
+        global_context: Text chunks derived from user-level ~/.claude/CLAUDE.md (if present).
+        timestamp: ISO-like UTC timestamp used for logging and result grouping.
+        chunks: Content chunks from the primary input (e.g., PRP draft content), ready for embedding.
+        chunk_embeddings: Vector representations corresponding to 'chunks'.
+        input_file: (optional) Path to the primary input file for this run.
+        draft_files: (optional) Collection of draft-related files accumulated during the run.
+    """
+    status: str
+    timestamp: str
+    input_file: str
+    draft_files: List[str]
+    # Project (repo) context chunks & vectors
+    project_context: List[str]
+    project_context_embeddings: List[List[float]]
+    project_context_sources: List[str]
+    project_context_ids: List[str]
+    # User (global) context chunks & vectors
+    global_context: List[str]
+    global_context_embeddings: List[List[float]]
+    global_context_sources: List[str]
+    global_context_ids: List[str]
+    # Corpus (docs) chunks & vectors
+    doc_chunks: List[str]
+    doc_chunk_embeddings: List[List[float]]
+    doc_chunk_sources: List[str]
+    doc_chunk_ids: List[str]
+    # Embedding metadata (shared if same model; corpus-specific otherwise)
+    embedding_model: str
+    embedding_dim: int
+    doc_embedding_model: str
+    doc_embedding_dim: int
 
 
 # ----------------------------
 # DraftPRP State
 # ----------------------------
 class PRPDraftState(TypedDict, total=False):
-        """Draft-phase subgraph state.
+    """Draft-phase subgraph state.
 
-        Intended to be constructed from PRPState by a glue node and used within a
-        separate draft-specific subgraph that may iterate reviews, apply agent
-        feedback, and produce draft artifacts. Selected outputs are later merged
-        back into PRPState.
+    Intended to be constructed from PRPState by a glue node and used within a
+    separate draft-specific subgraph that may iterate reviews, apply agent
+    feedback, and produce draft artifacts. Selected outputs are later merged
+    back into PRPState.
 
-        Fields:
-            prp_draft_file: Path to the working draft file (mutable across iterations).
-            timestamp: Inherited or set for the draft run; helpful for artifact naming.
-            chunks: Draft-relevant text chunks (could be derived from PRPState.chunks or re-split).
-            chunk_embeddings: Embeddings corresponding to chunks.
-            review_comments: Structured feedback/notes accumulated across reviewer agents.
-            model: Model identifier for draft-phase LLM calls.
-            max_iterations: Safety/termination control for iterative improvement loops.
-            agents: Active agent roles participating in the draft review.
-        """
-        prp_draft_file: str
-        timestamp: str
-        chunks: List[str]
-        chunk_embeddings: List[List[float]]
-        review_comments: List[Dict[str, Any]]
-        model: str
-        max_iterations: int
-        agents: List[str]
-        docs: List[List[float]]
-        project_context: List[str]
-        global_context: List[str]
+    Fields:
+        prp_draft_file: Path to the working draft file (mutable across iterations).
+        timestamp: Inherited or set for the draft run; helpful for artifact naming.
+        chunks: Draft-relevant text chunks (could be derived from PRPState.chunks or re-split).
+        chunk_embeddings: Embeddings corresponding to chunks.
+        review_comments: Structured feedback/notes accumulated across reviewer agents.
+        model: Model identifier for draft-phase LLM calls.
+        max_iterations: Safety/termination control for iterative improvement loops.
+        agents: Active agent roles participating in the draft review.
+    """
+    status: str
+    batch_id: str
+    prp_draft_file: str
+    timestamp: str
+    # Draft working chunks & embeddings
+    chunks: List[str]
+    chunk_embeddings: List[List[float]]
+    review_comments: List[Dict[str, Any]]
+    model: str
+    max_iterations: int
+    agents: List[str]
+    # Context pools (immutable copies from PRPState)
+    project_context: List[str]
+    project_context_embeddings: List[List[float]]
+    project_context_sources: List[str]
+    project_context_ids: List[str]
+    global_context: List[str]
+    global_context_embeddings: List[List[float]]
+    global_context_sources: List[str]
+    global_context_ids: List[str]
+    # Corpus pool snapshot
+    doc_chunks: List[str]
+    doc_chunk_embeddings: List[List[float]]
+    doc_chunk_sources: List[str]
+    doc_chunk_ids: List[str]
+    # Embedding metadata
+    embedding_model: str
+    embedding_dim: int
+    doc_embedding_model: str
+    doc_embedding_dim: int
 
 
 # ----------------------------
 # Helpers
 # ----------------------------
+
+def short_hash(s: str, n=16) -> str:
+    h = hashlib.sha256(s.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(h).decode("ascii").rstrip("=\n")[:n]
+
+
 def get_openai_embedder() -> CacheBackedEmbeddings:
     """Return a disk-cached embedding callable.
 
@@ -216,185 +301,6 @@ def embed_chunks(chunks: List[str], embedder: CacheBackedEmbeddings) -> List[Lis
                 large inputs to avoid request timeouts.
         """
         return embedder.embed_documents(chunks)
-
-# ----------------------------
-# Graph nodes
-# ----------------------------
-
-# SubGraph: Initialize DraftPRP
-
-
-# Main Graph
-def initialize_node(state: PRPState) -> PRPState:
-    """Initialize global context and log the start of the workflow.
-
-    Responsibilities:
-      - Log start info using provided timestamp (string; not parsed to datetime here).
-      - Load repo-level CLAUDE.md (if present) and convert it to chunks.
-      - Load user-level ~/.claude/CLAUDE.md (if present); fallback to a default principle.
-      - Return a state update with populated project_context and global_context.
-    """
-    logging.info("Initializing PRP workflow at %s", state.get("timestamp", "unknown time"))
-
-    # Load repo-level CLAUDE.md if present
-    path = Path(state["CLAUDE.md"] if "CLAUDE.md" in state else PROJECT_ROOT / "CLAUDE.md")
-    content = path.read_text(encoding="utf-8").strip() if path.exists() else ""
-    project_context = load_and_chunk(content)
-
-    # Load global context if present
-    global_context_path = Path.home() / ".claude" / "CLAUDE.md"
-    if global_context_path.exists():
-        global_context = load_and_chunk(global_context_path.read_text(encoding="utf-8").strip())
-    else:
-        global_context = ["Quality over Speed. Be thorough and thoughtful."]
-
-    return {
-        **state,
-        "project_context": project_context,
-        "global_context": global_context,
-    }
-
-def load_prp(global_state: PRPState, draft_state: PRPDraftState) -> PRPDraftState:
-    """Prototype for draft-phase loader (non-node helper).
-
-    This function demonstrates how a future glue node might translate from
-    PRPState to PRPDraftState and compute initial draft chunks/embeddings.
-    It is intentionally not a graph node because its signature does not match
-    the one-parameter state contract.
-    """
-    input_file = global_state.get("input_file", "")
-    path = Path(input_file)
-    if not path.exists():
-        raise FileNotFoundError(f"Input file {input_file} not found.")
-
-    content = path.read_text(encoding="utf-8").strip()
-
-    chunks = node_load_and_split(content)
-    embeddings = node_embed(chunks)
-
-    return {
-        **draft_state,
-        "chunks": chunks,
-        "chunk_embeddings": embeddings,
-    }
-
-def draft_prp_child_graph(state: PRPState) -> PRPState:
-    """Invoke the DraftPRP subgraph within the main PRP workflow.
-
-    Responsibilities:
-      - Construct an initial PRPDraftState from the provided PRPState.
-      - Invoke the draft subgraph with the constructed state.
-      - Merge selected outputs back into PRPState (e.g., draft_files).
-    """
-    draft_initial_state: PRPDraftState = {
-        "prp_draft_file": "",  # To be set appropriately
-        "timestamp": state.get("timestamp", ""),
-        "chunks": state.get("chunks", []),
-        "chunk_embeddings": state.get("chunk_embeddings", []),
-        "review_comments": [],
-        "model": MODEL_ID,
-        "max_iterations": 5,
-        "agents": BASE_AGENTS,
-        "project_context": state.get("project_context", []),
-        "global_context": state.get("global_context", []),
-        "docs": state.get("docs", []),
-    }
-
-    return {
-        **state,
-        "draft_files": [],  # Placeholder; populate with actual draft artifacts from draft_state
-    }
-
-def load_docs(state: PRPState) -> PRPState:
-    """Load and process the primary input document into chunks and embeddings.
-
-    Responsibilities:
-      - Read the input file specified in state["input_file"].
-      - Split the content into chunks.
-      - Compute embeddings for the chunks.
-      - Return an updated state with 'chunks' and 'chunk_embeddings' populated.
-    """
-
-    context_parts = []
-
-    scan_order = [
-        ('docs/', PROJECT_ROOT / 'docs/', True),
-        ('contracts/', PROJECT_ROOT / 'contracts/', True),
-        ('database/', PROJECT_ROOT / 'database/', True),
-        ('k8s/', PROJECT_ROOT / 'k8s/', True),
-        ('infrastructure/', PROJECT_ROOT / 'infrastructure/', True),
-        ('services/', PROJECT_ROOT / 'services/', True),
-        ('shared/', PROJECT_ROOT / 'shared/', True),
-        ('terraform/', PROJECT_ROOT / 'terraform/', True),
-        ('tests/', PROJECT_ROOT / 'tests/', True),
-        ('validation/', PROJECT_ROOT / 'validation/', True)
-    ]
-
-    for label, path, is_dir in scan_order:
-        if is_dir:
-            content = _read_directory_recursive(path, TEXT_EXTENSIONS, EXCLUDE_DIRS)
-            if content:
-                context_parts.append(content)
-        else:
-            if path.exists() and path.is_file():
-                try:
-                    file_content = path.read_text(encoding='utf-8', errors='replace').strip()
-
-                    if not file_content.strip():
-                        continue
-
-                    rel_path = path.relative_to(PROJECT_ROOT) if path.is_relative_to(PROJECT_ROOT) else path
-                    separator = f"=== {rel_path} ==="
-                    vector_data = load_and_chunk(file_content)
-                    entry = f"{separator}\n{vector_data}"
-
-                    context_parts.append(f"{separator}\n{entry}")
-                except Exception as e:
-                    logger.debug(f"Failed to read {path}: {e}")
-        return {
-            **state,
-            "docs": context_parts,
-        }
-
-
-# Text file extensions for context gathering
-TEXT_EXTENSIONS = {
-    # Documentation
-    '.md', '.txt', '.rst', '.adoc',
-    # Config/Data
-    '.yaml', '.yml', '.json', '.toml', '.ini', '.conf', '.cfg',
-    # Code
-    '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.rs', '.java',
-    '.c', '.cpp', '.h', '.hpp', '.cs', '.rb', '.php', '.sh', '.bash',
-    '.tf', '.tfvars', '.hcl',  # Terraform
-    '.sql', '.graphql', '.proto',  # Data/API
-    '.html', '.css', '.scss', '.sass', '.less',  # Web
-    '.xml', '.svg',
-    # Special files (no extension)
-    '.gitignore', '.dockerignore', 'Dockerfile', 'Makefile',
-    '.env.example'
-}
-
-# Directories and patterns to exclude
-EXCLUDE_DIRS = {
-    'node_modules', '__pycache__', '.git', '.svn', '.hg',
-    'venv', 'env', '.venv', '.env',
-    'dist', 'build', 'target', 'out', '.next', '.nuxt',
-    '.terraform', 'terraform.tfstate.d',
-    'coverage', '.pytest_cache', '.mypy_cache',
-    'vendor', 'Pods',
-    '.idea', '.vscode', '.vs'
-}
-
-EXCLUDE_PATTERNS = [
-    '*.pyc', '*.pyo', '*.so', '*.dylib', '*.dll', '*.exe',
-    '*.class', '*.jar', '*.war',
-    '*.min.js', '*.min.css',  # Minified files
-    '*.lock', 'package-lock.json', 'yarn.lock', 'poetry.lock',
-    '.DS_Store', 'Thumbs.db',
-    '*.log', '*.tmp', '*.temp', '*.swp', '*.swo'
-]
-
 
 def _is_text_file(file_path: Path) -> bool:
     """
@@ -514,37 +420,542 @@ def node_embed(data) -> List[List[float]]:
     vecs = embed_chunks(data, embedder)
     return vecs
 
+def _load_template() -> str:
+    """Load the PRP draft template from templates directory."""
+    template_path = PROJECT_ROOT / "templates" / "prp" / "prp-draft-001.json"
+
+    if not template_path.exists():
+        # Fallback to inline schema if template file doesn't exist
+        return json.dumps({
+            "atomicity": {"is_atomic": "true|false", "reasons": ["..."]},
+            "proposed_tasks": [{
+                "id": "t-<agent>-001",
+                "objective": "one sentence",
+                "affected_components": ["x"],
+                "dependencies": [],
+                "acceptance": ["..."],
+                "risk": ["..."],
+                "effort": "S|M|L"
+            }],
+            "split_recommendation": ["t-..."],
+            "delegation_suggestions": ["agent-name: reason"]
+        }, indent=2)
+
+    try:
+        content = template_path.read_text(encoding="utf-8").strip()
+        if not content:
+            # Template file is empty, use fallback
+            return json.dumps({
+                "atomicity": {"is_atomic": "true|false", "reasons": ["..."]},
+                "proposed_tasks": [{
+                    "id": "t-<agent>-001",
+                    "objective": "one sentence",
+                    "affected_components": ["x"],
+                    "dependencies": [],
+                    "acceptance": ["..."],
+                    "risk": ["..."],
+                    "effort": "S|M|L"
+                }],
+                "split_recommendation": ["t-..."],
+                "delegation_suggestions": ["agent-name: reason"]
+            }, indent=2)
+        return content
+    except Exception as e:
+        logger.warning(f" Failed to load template: {e}, using fallback")
+        return "{}"
+
+def _load_prp_prompt() -> str:
+    """Load the PRP draft prompt from prompts directory."""
+    prompt_path = PROJECT_ROOT / "prompts" / "prp" / "prp-draft-001.md"
+    if not prompt_path.exists():
+        # Fallback to basic prompt
+        return (
+            "You are being consulted as THE EXPERT for your domain.\n"
+            "Analyze the feature description and provide a task decomposition.\n"
+            "Only suggest delegation for tasks OUTSIDE your expertise."
+        )
+    try:
+        content = prompt_path.read_text(encoding="utf-8").strip()
+        if not content:
+            return (
+                "You are being consulted as THE EXPERT for your domain.\n"
+                "Analyze the feature description and provide a task decomposition.\n"
+                "Only suggest delegation for tasks OUTSIDE your expertise."
+            )
+        return content
+    except Exception as e:
+        logger.warning(f" Failed to load PRP prompt: {e}, using fallback")
+        return (
+            "You are being consulted as THE EXPERT for your domain.\n"
+            "Analyze the feature description and provide a task decomposition.\n"
+            "Only suggest delegation for tasks OUTSIDE your expertise."
+        )
+
+def _panel_user_instruction(feature: str) -> str:
+    """Build the user instruction for TASK001 panel decomposition."""
+    return (
+        f"Feature to decompose:\n{feature}\n\n"
+        "Task: Decompose this feature into ATOMIC tasks following the template provided in your system context.\n\n"
+        "Atomicity Rules:\n"
+        "- Single objective per task\n"
+        "- <= 2 affected_components\n"
+        "- <= 1 dependency (prefer 0)\n"
+        "- Testable acceptance criteria (3-5)\n"
+        "- No cross-service coupling unless trivial\n\n"
+        "Output: JSON matching the template structure exactly. No commentary."
+    )
+
+def _build_agent_catalog(max_lines: int = 50) -> str:
+    """Build a JSON catalog of available agents with first N lines of each."""
+    catalog = []
+
+    for base in AGENT_DIRS:
+        try:
+            files = sorted(Path(base).glob("*.md"), key=lambda p: p.stem)
+            for agent_file in files:
+                stem = agent_file.stem
+                try:
+                    text = agent_file.read_text(encoding="utf-8", errors="replace").splitlines()
+                    head = text[:max_lines]
+                    catalog.append({
+                        "id": stem,
+                        "summary": "\n".join(head).strip()
+                    })
+                except Exception:
+                    continue
+        except Exception:
+            continue
+
+    # Sort by agent ID for deterministic output
+    catalog = sorted(catalog, key=lambda x: x["id"])
+
+    return json.dumps({"available_agents": catalog}, indent=2, sort_keys=True, ensure_ascii=False)
+
+def load_agent_text(name: str) -> str:
+    """Load agent system prompt text from registry directories.
+
+    Search order is AGENT_DIRS; file is expected to be '<name>.md'.
+    Raises FileNotFoundError if not found.
+    """
+    fname = f"{name}.md"
+    for base in AGENT_DIRS:
+        p = base / fname
+        if p.exists():
+            return p.read_text(encoding="utf-8", errors="replace")
+    raise FileNotFoundError(f"Agent file not found for '{name}' in: {', '.join(str(d) for d in AGENT_DIRS)}")
+
+def _extract_suggested_agents(payload: dict) -> set[str]:
+    """Return a set of agent names from various suggestion shapes."""
+    names: set[str] = set()
+
+    def _add(name: str | None):
+        if isinstance(name, str):
+            n = name.strip()
+            if n:
+                names.add(n)
+
+    def _process_list(lst: list[Any]):
+        for entry in lst:
+            if isinstance(entry, str):
+                _add(entry.split(":", 1)[0])
+            elif isinstance(entry, dict):
+                for k, v in entry.items():
+                    if k == "agent" and isinstance(v, str):
+                        _add(v)
+                    elif isinstance(k, str) and k not in ("reason",):
+                        _add(k)
+
+    if isinstance(payload, dict):
+        for key in ("delegation_suggestions", "delegation_recommendations", "recommended_agents"):
+            val = payload.get(key)
+            if isinstance(val, list):
+                _process_list(val)
+        content = payload.get("content")
+        if isinstance(content, dict):
+            for key in ("delegation_suggestions", "delegation_recommendations", "recommended_agents"):
+                val = content.get(key)
+                if isinstance(val, list):
+                    _process_list(val)
+    return names
+
+# ----------------------------
+# Retrieval Pool Helpers
+# ----------------------------
+def process_chunk(chunk: str, embedding: List[float] | None, source: str | None, cid: str | None) -> None:
+    """Placeholder processing hook (currently a no-op with debug logging).
+
+    This can be extended to perform normalization, vector post-processing,
+    or side-channel indexing. Keeping it isolated avoids mixing concerns
+    inside accessor utilities.
+    """
+    if chunk and source:
+        logging.debug("process_chunk | source=%s | len=%d", source, len(chunk))
+
+def get_project_pool(draft_state: PRPDraftState) -> List[Dict[str, Any]]:
+    """Return structured project context entries.
+
+    Each entry contains: chunk, embedding, source, id, pool label.
+    Defensive defaults ensure empty lists instead of None to simplify callers.
+    """
+    chunks = draft_state.get("project_context", []) or []
+    embeddings = draft_state.get("project_context_embeddings", []) or []
+    sources = draft_state.get("project_context_sources", []) or []
+    ids = draft_state.get("project_context_ids", []) or []
+    # Length harmonization (truncate to shortest to avoid IndexError)
+    n = min(len(chunks), len(embeddings), len(sources), len(ids))
+    pool_entries: List[Dict[str, Any]] = []
+    for i in range(n):
+        entry = {
+            "chunk": chunks[i],
+            "embedding": embeddings[i],
+            "source": sources[i],
+            "id": ids[i],
+            "pool": "project",
+        }
+        process_chunk(entry["chunk"], entry["embedding"], entry["source"], entry["id"])
+        pool_entries.append(entry)
+    return pool_entries
+
+def submit_claude_batch(draft_state: PRPDraftState) -> PRPDraftState:
+    """Placeholder for batch submission to Claude API.
+
+    This function is a stub and should be implemented with actual API calls.
+    For now, it simulates responses for demonstration purposes.
+    """
+    # Placeholder: real batch submission logic will go here.
+    # For now, just return the draft_state unchanged.
+    return draft_state
+
+# (Removed earlier duplicate submit_draft_prp definition; see final implementation below.)
+
+# ----------------------------
+# Graph nodes
+# ----------------------------
+
+# SubGraph: Initialize DraftPRP
+
+def draft_prp_child_graph(state: PRPState) -> PRPState:
+    """Invoke the DraftPRP subgraph within the main PRP workflow.
+
+    Responsibilities:
+      - Construct an initial PRPDraftState from the provided PRPState.
+      - Invoke the draft subgraph with the constructed state.
+      - Merge selected outputs back into PRPState (e.g., draft_files).
+    """
+    draft_initial_state: PRPDraftState = {
+        "prp_draft_file": state.get("prp_draft_file", ""),  
+        "timestamp": state.get("timestamp", ""),
+        "chunks": [],  # draft working chunks start empty
+        "chunk_embeddings": [],
+        # Context pools copied from PRPState
+        "review_comments": [],
+        "model": MODEL_ID,
+        "max_iterations": 5,
+        "agents": BASE_AGENTS,
+        "project_context": state.get("project_context", []),
+        "project_context_embeddings": state.get("project_context_embeddings", []),
+        "project_context_sources": state.get("project_context_sources", []),
+        "project_context_ids": state.get("project_context_ids", []),
+        "global_context": state.get("global_context", []),
+        "global_context_embeddings": state.get("global_context_embeddings", []),
+        "global_context_sources": state.get("global_context_sources", []),
+        "global_context_ids": state.get("global_context_ids", []),
+        "doc_chunks": state.get("doc_chunks", []),
+        "doc_chunk_embeddings": state.get("doc_chunk_embeddings", []),
+        "doc_chunk_sources": state.get("doc_chunk_sources", []),
+        "doc_chunk_ids": state.get("doc_chunk_ids", []),
+        "embedding_model": state.get("embedding_model", ""),
+        "embedding_dim": state.get("embedding_dim", 0),
+        "doc_embedding_model": state.get("doc_embedding_model", ""),
+        "doc_embedding_dim": state.get("doc_embedding_dim", 0),
+    }
+
+    return {
+        **state
+    }
+
+def load_prp(draft_state: PRPDraftState) -> PRPDraftState:
+    """Prototype for draft-phase loader (non-node helper).
+
+    This function demonstrates how a future glue node might translate from
+    PRPState to PRPDraftState and compute initial draft chunks/embeddings.
+    It is intentionally not a graph node because its signature does not match
+    the one-parameter state contract.
+    """
+
+    parentState: PRPState = draft_state  # type: ignore
+    input_file = parentState.get("prp_draft_file", "")
+    path = Path(input_file)
+    if not path.exists():
+        raise FileNotFoundError(f"Input file {input_file} not found.")
+
+    content = path.read_text(encoding="utf-8").strip()
+
+    chunks = node_load_and_split(content)
+    embeddings = node_embed(chunks)
+
+    return {
+        **draft_state,
+        "chunks": chunks,
+        "chunk_embeddings": embeddings,
+    }
+
+def submit_draft_prp(draft_state: PRPDraftState) -> PRPDraftState:
+    """Submit the draft PRP to the Claude API in batch mode.
+
+    Responsibilities:
+      - Construct and send batch requests to the Claude API using the draft state.
+      - Handle responses and update the draft state accordingly.
+      - Return the updated draft state.
+    """
+    # Placeholder: real batch submission logic will go here.
+    # For now, just return the draft_state unchanged.
+    return draft_state
+
+
+def build_batch_requests(draft_state: PRPDraftState) -> List[MessageCreateParamsNonStreaming]:
+    """Build batch requests for the Claude API based on the draft state.
+
+    This function constructs the necessary request payloads for batch processing.
+    """
+
+    template = _load_template()
+    requests: List[MessageCreateParamsNonStreaming] = []
+
+    # Example: Create a single request using the draft chunks
+    user_message = {
+        "role": "user",
+        "content": "\n\n".join(draft_state.get("chunks", []))
+    }
+
+    request = MessageCreateParamsNonStreaming(
+        model=MODEL_ID,
+        messages=[user_message],
+        max_tokens_to_sample=65000,
+        temperature=0.9,
+    )
+
+    requests.append(request)
+
+    return requests
+
+# Main Graph
+def initialize_node(state: PRPState) -> PRPState:
+    """Initialize global context and log the start of the workflow.
+
+    Responsibilities:
+      - Log start info using provided timestamp (string; not parsed to datetime here).
+      - Load repo-level CLAUDE.md (if present) and convert it to chunks.
+      - Load user-level ~/.claude/CLAUDE.md (if present); fallback to a default principle.
+      - Return a state update with populated project_context and global_context.
+    """
+
+    logging.info("Initializing PRP workflow at %s", state.get("timestamp", "unknown time"))
+
+    # Load repo-level CLAUDE.md if present
+    path = Path(state["CLAUDE.md"] if "CLAUDE.md" in state else PROJECT_ROOT / "CLAUDE.md")
+    project_content_path = path.read_text(encoding="utf-8").strip() if path.exists() else ""
+    project_context = load_and_chunk(project_content_path)
+
+    # Load global context if present
+    global_context_path = Path.home() / ".claude" / "CLAUDE.md"
+    if global_context_path.exists():
+        raw_global = global_context_path.read_text(encoding="utf-8", errors="replace").strip()
+        global_context = load_and_chunk(raw_global)
+    else:
+        global_context = ["Quality over Speed. Be thorough and thoughtful."]
+
+    embedder = get_openai_embedder()
+
+    project_context_embeddings = embedder.embed_documents(project_context)
+    project_context_sources = [str(path)] * len(project_context)
+    user_context_embeddings = embedder.embed_documents(global_context)
+    user_context_sources = [str(global_context_path)] * len(global_context)
+    project_context_ids = [f"project|{short_hash(f'{i}|{c[:40]}')}" for i, c in enumerate(project_context)]
+    global_context_ids = [f"global|{short_hash(f'{i}|{c[:40]}')}" for i, c in enumerate(global_context)]
+    embedding_model = "text-embedding-3-large"
+    embedding_dim = len(project_context_embeddings[0]) if project_context_embeddings else 0
+    return {
+        **state,
+        "project_context": project_context,
+        "project_context_embeddings": project_context_embeddings,
+        "project_context_sources": project_context_sources,
+        "project_context_ids": project_context_ids,
+        "global_context": global_context,
+        "global_context_embeddings": user_context_embeddings,
+        "global_context_sources": user_context_sources,
+        "global_context_ids": global_context_ids,
+        "embedding_model": embedding_model,
+        "embedding_dim": embedding_dim,
+    }
+
+def load_docs(state: PRPState) -> PRPState:
+    """Load and process the primary input document into chunks and embeddings.
+
+    Responsibilities:
+      - Read the input file specified in state["input_file"].
+      - Split the content into chunks.
+      - Compute embeddings for the chunks.
+      - Return an updated state with 'chunks' and 'chunk_embeddings' populated.
+    """
+
+    scan_order = [
+        ('docs/', PROJECT_ROOT / 'docs/', True),
+        ('contracts/', PROJECT_ROOT / 'contracts/', True),
+        ('database/', PROJECT_ROOT / 'database/', True),
+        ('k8s/', PROJECT_ROOT / 'k8s/', True),
+        ('infrastructure/', PROJECT_ROOT / 'infrastructure/', True),
+        ('services/', PROJECT_ROOT / 'services/', True),
+        ('shared/', PROJECT_ROOT / 'shared/', True),
+        ('terraform/', PROJECT_ROOT / 'terraform/', True),
+        ('tests/', PROJECT_ROOT / 'tests/', True),
+        ('validation/', PROJECT_ROOT / 'validation/', True)
+    ]
+
+    file_entries = []  # list of (relative_path: str, text: str)
+    project_ids: List[str] = state.get("project_context_ids", []) or []
+    global_ids: List[str] = state.get("global_context_ids", []) or []
+    chunk_ids: List[str] = []
+
+    # Include the primary input file if provided
+    input_file = state.get("input_file")
+    if isinstance(input_file, str) and input_file:
+        input_path = Path(input_file)
+        if input_path.exists() and input_path.is_file():
+            try:
+                txt = input_path.read_text(encoding="utf-8", errors="replace").strip()
+                if txt:
+                    try:
+                        rel = str(input_path.relative_to(PROJECT_ROOT))
+                    except Exception:
+                        rel = str(input_path)
+                    file_entries.append((rel, txt))
+                    print(f"Loaded {rel} ({len(txt)} chars)")
+            except Exception:
+                pass
+
+    for label, path_obj, is_dir in scan_order:
+        if is_dir and path_obj.exists():
+            for fp in sorted(path_obj.rglob("*")):
+                if not fp.is_file():
+                    continue
+                if not _is_text_file(fp):
+                    continue
+                try:
+                    txt = fp.read_text(encoding="utf-8", errors="replace").strip()
+                except Exception:
+                    continue
+                if not txt:
+                    continue
+                rel = str(fp.relative_to(PROJECT_ROOT))
+                file_entries.append((rel, txt))
+                print(f"Loaded {rel} ({len(txt)} chars)")
+
+    docs = splitter.create_documents(
+        [text for _, text in file_entries],
+        metadatas=[{"source": rel_path} for rel_path, _ in file_entries],
+    )
+
+    chunks = [d.page_content for d in docs]
+    chunk_sources = [d.metadata.get("source", "") for d in docs]
+    embedder = get_openai_embedder()
+    chunk_embeddings = embed_chunks(chunks, embedder)
+    assert len(chunk_embeddings) == len(chunks)
+
+    embedding_model = "text-embedding-3-large"
+    for content, src in zip(chunks, chunk_sources):
+        h_input = f"{embedding_model}|doc|{src}|{content}"
+        chunk_ids.append(f"doc|{src}#{short_hash(h_input)}")
+    
+    embedding_dim = len(chunk_embeddings[0]) if chunk_embeddings else 0
+        
+    return {
+        **state,
+        "doc_chunks": chunks,
+        "doc_chunk_embeddings": chunk_embeddings,
+        "doc_chunk_sources": chunk_sources,
+        "doc_chunk_ids": chunk_ids,
+        "doc_embedding_model": embedding_model,
+        "doc_embedding_dim": embedding_dim,
+    }
+
+
+def run_draft_phase(state: PRPState) -> PRPState:
+    draft_state: PRPDraftState = {
+        "prp_draft_file": state.get("input_file", ""),
+        "timestamp": state.get("timestamp", ""),
+        "chunks": [],
+        "chunk_embeddings": [],
+        "project_context": state.get("project_context", []),
+        "project_context_embeddings": state.get("project_context_embeddings", []),
+        "project_context_sources": state.get("project_context_sources", []),
+        "project_context_ids": state.get("project_context_ids", []),
+        "global_context": state.get("global_context", []),
+        "global_context_embeddings": state.get("global_context_embeddings", []),
+        "global_context_sources": state.get("global_context_sources", []),
+        "global_context_ids": state.get("global_context_ids", []),
+        "doc_chunks": state.get("doc_chunks", []),
+        "doc_chunk_embeddings": state.get("doc_chunk_embeddings", []),
+        "doc_chunk_sources": state.get("doc_chunk_sources", []),
+        "doc_chunk_ids": state.get("doc_chunk_ids", []),
+        "embedding_model": state.get("embedding_model", ""),
+        "embedding_dim": state.get("embedding_dim", 0),
+        "doc_embedding_model": state.get("doc_embedding_model", ""),
+        "doc_embedding_dim": state.get("doc_embedding_dim", 0),
+    }
+
+    draft_workflow = build_draft_subgraph()
+    draft_result: PRPDraftState = draft_workflow.invoke(draft_state)
+
+    # Merge any draft artifacts you want back into PRPState
+    merged = {
+        **state,
+        "draft_files": state.get("draft_files", []),
+        # Add any material you decide to surface, e.g. 'proposed_tasks'
+    }
+    return merged
 
 # ----------------------------
 # Build workflow
 # ----------------------------
 def build_workflow() -> Any:
-        """Assemble and compile the top-level PRP graph.
+    """Assemble and compile the top-level PRP graph.
 
-        Current flow:
-            START -> initialize -> (placeholder) -> END
+    Flow:
+        START -> initialize -> load_docs -> draft_prp_child_graph -> submit_draft_prp -> END
+    """
+    graph = StateGraph(PRPState)
+    graph.add_node("initialize", initialize_node)
+    graph.add_node("load_docs", load_docs)
+    graph.add_node("run_draft_phase", run_draft_phase)
+    
 
-        Notes:
-            - The draft-phase is not yet wired as a subgraph. When ready, introduce a
-                run_draft_phase(state: PRPState) node that performs the PRPState<->PRPDraftState
-                handoff and calls the draft subgraph internally, returning an updated PRPState.
-            - To use START, ensure `from langgraph.graph import START, END` is imported.
-            - Do not add `load_prp` here as-is; its signature is a two-arg helper, not a node.
-        """
-        graph = StateGraph(PRPState)
-        
+    graph.add_edge(START, "initialize")
+    graph.add_edge("initialize", "load_docs")
+    graph.add_edge("load_docs", "run_draft_phase")
+    graph.add_edge("run_draft_phase", END)
 
-        graph.add_node("initialize", initialize_node)
-        graph.add_node("load_docs", load_docs)
-        graph.add_node("draft_prp_child_graph", draft_prp_child_graph)  # Evaluate Draft PRP Process Child Graph
+    return graph.compile()
 
+def build_draft_subgraph() -> Any:
+    """Assemble and compile the DraftPRP subgraph.
 
-        graph.add_edge(START, "initialize")
-        graph.add_edge("initialize", "load_docs")
-        graph.add_edge("load_docs", "draft_prp_child_graph")
-        graph.add_edge("draft_prp_child_graph", END)
+    Flow:
+        START -> load_prp -> submit_draft_prp -> END
+    """
+    graph = StateGraph(PRPDraftState)
+    graph.add_node("initialize", load_prp)
+    graph.add_node("build_batch_requests", build_batch_requests)
+    graph.add_node("submit_draft_prp", submit_draft_prp)
+    
 
-        return graph.compile()
+    graph.add_edge(START, "initialize")
+    graph.add_edge("initialize", "build_batch_requests")
+    graph.add_edge("build_batch_requests", "submit_draft_prp")
+    graph.add_edge("submit_draft_prp", END)
+
+    return graph.compile()
+
 
 # ----------------------------
 # Main
@@ -579,13 +990,14 @@ def main() -> int:
 
     final_state: PRPState = workflow.invoke(initial_state)  # .run() -> .invoke() in v1
     logging.info(
-        "Chunks: %d | Embeddings: %d",
-        len(final_state.get("chunks", [])),
-        len(final_state.get("chunk_embeddings", [])),
+        "Project ctx: %d | User ctx: %d | Corpus chunks: %d",
+        len(final_state.get("project_context", [])),
+        len(final_state.get("global_context", [])),
+        len(final_state.get("doc_chunks", [])),
     )
-    print("Final State:")
-    for key, value in final_state.items():
-        print(f"  {key}: {value}")
+    # print("Final State:")
+    # for key, value in final_state.items():
+    #     print(f"  {key}: {value}")
     return 0
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@
 - **Version**: 0.2.0-clean-slate
 - **Current Lesson**: 01 - Hello LangGraph
 - **Approach**: Incremental learning through hands-on building
+- **Current Focus**: Understanding fundamentals before adding complexity (prp-workflow.py will eventually become production-ready)
 
 ## Learning Goals
 
