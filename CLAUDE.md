@@ -33,7 +33,7 @@ But we're starting with the simplest possible workflow first!
 ## Repository Structure
 
 ```
-LangChangeWorkflows/
+LangChainWorkflows/
 ├── lessons/              # Step-by-step learning modules
 │   ├── 00-setup/        # Environment setup ✅
 │   ├── 01-hello-langgraph/  # First workflow 🔄

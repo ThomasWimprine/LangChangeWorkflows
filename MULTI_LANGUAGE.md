@@ -9,7 +9,7 @@ The LangGraph PRP Workflow supports **any project type** - Python, Node.js, Go, 
 cd /path/to/your/project
 
 # Auto-detect and run
-python3 ~/Repositories/LangChangeWorkflows/examples/auto_detect_runner.py
+python3 ~/Repositories/LangChainWorkflows/examples/auto_detect_runner.py
 ```
 
 The auto-detect runner will:
@@ -45,7 +45,7 @@ my-node-app/
 
 # Run workflow
 cd my-node-app
-python3 ~/Repositories/LangChangeWorkflows/examples/auto_detect_runner.py
+python3 ~/Repositories/LangChainWorkflows/examples/auto_detect_runner.py
 ```
 
 **What it validates:**
@@ -73,7 +73,7 @@ my-go-app/
 
 # Run workflow
 cd my-go-app
-python3 ~/Repositories/LangChangeWorkflows/examples/auto_detect_runner.py
+python3 ~/Repositories/LangChainWorkflows/examples/auto_detect_runner.py
 ```
 
 **What it validates:**
@@ -97,7 +97,7 @@ my-terraform/
 
 # Run workflow
 cd my-terraform
-python3 ~/Repositories/LangChangeWorkflows/examples/auto_detect_runner.py
+python3 ~/Repositories/LangChainWorkflows/examples/auto_detect_runner.py
 ```
 
 **What it validates:**
@@ -113,15 +113,15 @@ Copy the appropriate config to your project:
 
 ```bash
 # For Node.js
-cp ~/Repositories/LangChangeWorkflows/examples/project_configs/nodejs_project.yaml \
+cp ~/Repositories/LangChainWorkflows/examples/project_configs/nodejs_project.yaml \
    .langgraph/config/gates.yaml
 
 # For Go
-cp ~/Repositories/LangChangeWorkflows/examples/project_configs/go_project.yaml \
+cp ~/Repositories/LangChainWorkflows/examples/project_configs/go_project.yaml \
    .langgraph/config/gates.yaml
 
 # For Terraform
-cp ~/Repositories/LangChangeWorkflows/examples/project_configs/terraform_project.yaml \
+cp ~/Repositories/LangChainWorkflows/examples/project_configs/terraform_project.yaml \
    .langgraph/config/gates.yaml
 ```
 
@@ -218,7 +218,7 @@ mvn clean test jacoco:report
 
 ```bash
 cd ~/projects/my-express-api
-python3 ~/Repositories/LangChangeWorkflows/examples/auto_detect_runner.py
+python3 ~/Repositories/LangChainWorkflows/examples/auto_detect_runner.py
 ```
 
 Gate 2 will run: `jest --coverage` or `npm test -- --coverage`
@@ -227,7 +227,7 @@ Gate 2 will run: `jest --coverage` or `npm test -- --coverage`
 
 ```bash
 cd ~/projects/my-go-service
-python3 ~/Repositories/LangChangeWorkflows/examples/auto_detect_runner.py
+python3 ~/Repositories/LangChainWorkflows/examples/auto_detect_runner.py
 ```
 
 Gate 2 will run: `go test -coverprofile=coverage.out ./...`
@@ -236,7 +236,7 @@ Gate 2 will run: `go test -coverprofile=coverage.out ./...`
 
 ```bash
 cd ~/projects/my-infra
-python3 ~/Repositories/LangChangeWorkflows/examples/auto_detect_runner.py
+python3 ~/Repositories/LangChainWorkflows/examples/auto_detect_runner.py
 ```
 
 Gate 2 will run: `cd tests && go test -v` (if using Terratest)
@@ -303,7 +303,7 @@ result = workflow.execute(
 1. **Test on your project:**
    ```bash
    cd /path/to/your/project
-   python3 ~/Repositories/LangChangeWorkflows/examples/auto_detect_runner.py
+   python3 ~/Repositories/LangChainWorkflows/examples/auto_detect_runner.py
    ```
 
 2. **Review results:** Check coverage, cost, and gate status

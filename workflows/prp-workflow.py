@@ -39,7 +39,7 @@ import logging
 from typing import TypedDict, Optional, Any, List, Dict
 from pathlib import Path
 from datetime import datetime, UTC
-import argparse, os, json, time, random, hashlib, base64
+import argparse, os, json, time, random, hashlib, base64, re
 
 # Set up module logger
 logger = logging.getLogger(__name__)
@@ -76,7 +76,7 @@ from anthropic.types.messages.batch_create_params import Request
 # Config / globals
 # ----------------------------
 SCRIPT_DIR = Path(__file__).parent  # Directory containing this script
-PROJECT_ROOT = SCRIPT_DIR.parent    # Repository root for LangChangeWorkflows
+PROJECT_ROOT = SCRIPT_DIR.parent    # Repository root for LangChainWorkflows
 
 BASE_AGENTS = [  # Baseline agent roster for upcoming draft-review subgraph
     "project-manager",
@@ -197,8 +197,12 @@ class PRPState(TypedDict, total=False):
     doc_embedding_dim: int
     # Draft-phase surfaced fields (optional)
     batch_id: str
-    responses: List[Any]
+    responses: List[Any]  # Current batch only (gets overwritten)
     review_comments: List[Dict[str, Any]]
+    proposed_tasks: List[Dict[str, Any]]
+    delegation_suggestions: List[Dict[str, Any]]
+    agent_responses: List[Dict[str, Any]]  # Complete JSON from ALL agents (accumulated)
+    token_usage: Dict[str, int]
 
 
 # ----------------------------
@@ -222,6 +226,8 @@ class PRPDraftState(TypedDict, total=False):
         max_iterations: Safety/termination control for iterative improvement loops.
         agents: Active agent roles participating in the draft review.
     """
+    agents_seen: List[str]
+    all_suggestions: List[str]
     status: str
     batch_id: str
     prp_draft_file: str
@@ -232,10 +238,15 @@ class PRPDraftState(TypedDict, total=False):
     review_comments: List[Dict[str, Any]]
     model: str
     max_iterations: int
+    current_iteration: int
     agents: List[str]
+    agents_processed: List[str]
+    delegation_suggestions: List[Dict[str, Any]]
+    should_continue: bool
     # Batch processing fields
     batch_requests: List[Any]
-    responses: List[Any]
+    responses: List[Any]  # Current batch responses only (overwritten each iteration)
+    agent_responses: List[Dict[str, Any]]  # ALL complete agent responses (accumulated)
     # Context pools (immutable copies from PRPState)
     project_context: List[str]
     project_context_embeddings: List[List[float]]
@@ -257,6 +268,7 @@ class PRPDraftState(TypedDict, total=False):
     doc_embedding_dim: int
     # Derived artifacts
     proposed_tasks: List[Dict[str, Any]]
+    token_usage: Dict[str, int]
     batch_id: str
     batch: List[Any]
 
@@ -268,6 +280,41 @@ class PRPDraftState(TypedDict, total=False):
 def short_hash(s: str, n=16) -> str:
     h = hashlib.sha256(s.encode("utf-8")).digest()
     return base64.urlsafe_b64encode(h).decode("ascii").rstrip("=\n")[:n]
+
+
+def extract_json_from_markdown(text: str) -> dict:
+    """Extract and parse JSON from markdown code blocks.
+
+    Handles responses wrapped in ```json...``` or ```...``` fences.
+    Falls back to parsing raw text if no code fence is found.
+
+    Args:
+        text: Response text that may contain markdown-wrapped JSON
+
+    Returns:
+        Parsed JSON as a dict, or empty dict if parsing fails
+    """
+    if not text or not text.strip():
+        logger.warning("Empty text provided to extract_json_from_markdown")
+        return {}
+
+    # Try to find JSON within markdown code fences
+    # Pattern matches: ```json\n{...}\n``` or ```\n{...}\n```
+    pattern = r'```(?:json)?\s*\n(.*?)\n```'
+    match = re.search(pattern, text, re.DOTALL)
+
+    if match:
+        json_str = match.group(1).strip()
+    else:
+        # No code fence found, try parsing entire text
+        json_str = text.strip()
+
+    try:
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON: {e}")
+        logger.debug(f"Raw text (first 500 chars): {text[:500]}...")
+        return {}
 
 
 def get_openai_embedder() -> CacheBackedEmbeddings:
@@ -672,6 +719,8 @@ def draft_prp_child_graph(state: PRPState) -> PRPState:
         "model": MODEL_ID,
         "max_iterations": 5,
         "agents": BASE_AGENTS,
+        "agents_seen": [],
+        "all_suggestions": [],
         "project_context": state.get("project_context", []),
         "project_context_embeddings": state.get("project_context_embeddings", []),
         "project_context_sources": state.get("project_context_sources", []),
@@ -775,37 +824,90 @@ def build_batch_requests(state: PRPDraftState) -> PRPDraftState:
     # Use simple dicts for stubbed requests to avoid strict type coupling.
     requests: List[Dict[str, Any]] = []
 
-    # Build requests for each agent
-    for agent_name in sorted(state.get("agents", [])):
+    # Filter to only NEW agents (not already processed)
+    all_agents = set(state.get("agents", []))
+    agents_processed = set(state.get("agents_processed", []))
+    agents_to_process = sorted(all_agents - agents_processed)
+
+    logger.info(f"Building batch requests for {len(agents_to_process)} new agents: {agents_to_process}")
+    if agents_processed:
+        logger.info(f"Skipping {len(agents_processed)} already-processed agents")
+
+    # Build requests for each NEW agent
+    for agent_name in agents_to_process:
         try:
             agent_text = load_agent_text(agent_name)
             logger.debug("Loaded agent '%s' text (%d chars)", agent_name, len(agent_text))
-
-            # Construct system prompt with agent context, template, and available agents
-            system_prompt = f"""You are {agent_name}.
-
-{agent_text[:2000]}  # Truncate to keep under token limits
-
-Available Agents for Delegation:
-{agent_catalog}
-
-Task Decomposition Template:
-{template}
-
-{prp_prompt}
-"""
 
             # Construct user message with draft content
             user_content = "\n\n".join(state.get("chunks", []))
             user_message = _panel_user_instruction(user_content)
 
-            # Build API request
+            # Build context strings for caching
+            project_context_str = "\n\n".join(state.get("project_context", []))
+            global_context_str = "\n\n".join(state.get("global_context", []))
+            # Limit doc chunks to avoid token limits (first 50 chunks)
+            doc_chunks_str = "\n\n".join(state.get("doc_chunks", [])[:50])
+
+            # Build API request with aggressive caching strategy
+            # Order: unique agent content first, then shared cached content
             request = {
                 "custom_id": f"{agent_name}-{short_hash(user_content[:100])}",
                 "params": {
                     "model": MODEL_ID,
-                    "messages": [{"role": "user", "content": user_message}],
-                    "system": system_prompt,
+
+                    # System: Optimized for 4-block cache limit
+                    # Strategy: Cache the largest, most reusable blocks
+                    "system": [
+                        # Block 1: Agent-specific (NOT cached - varies per agent)
+                        {
+                            "type": "text",
+                            "text": f"You are {agent_name}.\n\n{agent_text[:2000]}"
+                        },
+                        # Block 2: Documentation (CACHED - ~50K tokens, same for all)
+                        {
+                            "type": "text",
+                            "text": f"Documentation:\n{doc_chunks_str}",
+                            "cache_control": {"type": "ephemeral", "ttl": "1h"}
+                        },
+                        # Block 3: Agent catalog (CACHED - ~50K tokens, same for all)
+                        {
+                            "type": "text",
+                            "text": f"Available Agents for Delegation:\n{agent_catalog}",
+                            "cache_control": {"type": "ephemeral", "ttl": "1h"}
+                        },
+                        # Block 4: Combined contexts and instructions (CACHED - ~20K tokens, same for all)
+                        {
+                            "type": "text",
+                            "text": f"""Project Context:
+{project_context_str}
+
+Global Context:
+{global_context_str}
+
+Task Decomposition Template:
+{template}
+
+{prp_prompt}""",
+                            "cache_control": {"type": "ephemeral", "ttl": "1h"}
+                        }
+                    ],
+
+                    # Messages: Cache the draft content (CACHED - ~10K tokens, same for all)
+                    # This is cache block 4 (total: 3 in system + 1 in messages = 4 cache blocks)
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": user_message,
+                                    "cache_control": {"type": "ephemeral", "ttl": "1h"}
+                                }
+                            ]
+                        }
+                    ],
+
                     "temperature": 0.9,
                     "max_tokens": 40960
                 }
@@ -819,83 +921,344 @@ Task Decomposition Template:
             logger.error("Error building request for agent '%s': %s", agent_name, e)
             continue
 
-    logger.info("Built %d batch requests for agents: %s", len(requests), ", ".join(state.get("agents", [])))
-    return {**state, "batch_requests": requests}
+    # Update agents_processed to include the agents we just built requests for
+    updated_agents_processed = list(agents_processed | set(agents_to_process))
+
+    logger.info("Built %d batch requests for new agents: %s", len(requests), ", ".join(agents_to_process))
+    return {**state, "batch_requests": requests, "agents_processed": updated_agents_processed}
 
 def retrieve_claude_batch(state: PRPDraftState) -> PRPDraftState:
     """Retrieve completed batch results from Claude API.
 
-    In a real implementation, this would poll the provider for completion
-    using state["batch_id"].
+    Polls the Anthropic Batch API until the batch is complete, then retrieves
+    and processes all individual results.
 
-    TODO (Production): Implement batch result polling:
-      1. Use batch_id to check status with client.messages.batches.retrieve()
-      2. Poll with exponential backoff until status is 'ended'
-      3. Download results using results_url from batch response
-      4. Parse JSONL results into response objects
-      5. Handle partial failures and individual request errors
-      6. Add timeout and maximum poll attempts
-      Reference: https://docs.anthropic.com/en/docs/build-with-claude/batch-processing
+    Reference: https://docs.anthropic.com/en/docs/build-with-claude/batch-processing
     """
-    # Stub: Return immediately if already has responses
-    if state.get("responses"):
-        return state
 
-    # Stub: Generate placeholder responses for testing
-    batch_id = state.get("batch_id", "unknown")
-    num_requests = len(state.get("batch_requests", []))
-    placeholder = [{"status": "ok", "result": "stubbed-response"} for _ in range(num_requests)]
+    client = anthropic.Anthropic()  # Uses ANTHROPIC_API_KEY from environment
+    batch_id = state.get("batch_id", "")
+    max_polls = 1440  # 24 hours with 60-second intervals
+    poll_count = 0
 
-    logger.info("STUB: Simulating batch retrieval for batch_id=%s with %d responses", batch_id, num_requests)
-    logger.warning("TODO: Replace stub with real Anthropic Batch API polling")
+    # Phase 1: Poll for batch completion
+    while poll_count < max_polls:
+        poll_count += 1
+        try:
+            message_batch = client.messages.batches.retrieve(batch_id)
 
-    return {**state, "responses": placeholder, "status": "batch-completed"}
+            if message_batch.processing_status == "ended":
+                logger.info(f"Batch {batch_id} completed successfully after {poll_count} polls")
+                break
+            elif message_batch.processing_status == "in_progress":
+                # Add jitter to avoid thundering herd
+                jitter = 60 + (60 * random.uniform(-.5, .5))
+                logger.info(f"Batch {batch_id} still processing... (poll {poll_count}/{max_polls}, retry in {jitter:.1f}s)")
+                time.sleep(jitter)
+                continue
+            elif message_batch.processing_status in ["canceled", "expired"]:
+                logger.error(f"Batch {batch_id} ended with status: {message_batch.processing_status}")
+                return {**state, "status": f"batch-{message_batch.processing_status}"}
+            else:
+                logger.warning(f"Unexpected batch status: {message_batch.processing_status}")
+                time.sleep(60)
+                continue
+
+        except Exception as e:
+            logger.error(f"Error polling batch status for {batch_id}: {e}")
+            return {**state, "status": "batch-poll-failed", "error": str(e)}
+
+    # Check if we timed out
+    if poll_count >= max_polls:
+        logger.error(f"Batch {batch_id} polling timeout after {max_polls} attempts (24 hours)")
+        return {**state, "status": "batch-timeout"}
+
+    # Phase 2: Retrieve results (only after batch ended)
+    results = []
+    try:
+        for result in client.messages.batches.results(batch_id):
+            logger.info(f"Retrieved result for request {result.custom_id}")
+
+            match result.result.type:
+                case "succeeded":
+                    logger.info(f"Result for {result.custom_id} succeeded")
+
+                    # Extract the response text from the Message object
+                    message = result.result.message
+                    response_text = message.content[0].text if message.content else ""
+
+                    # Parse the JSON response (handles markdown code fences)
+                    parsed_response = extract_json_from_markdown(response_text)
+
+                    results.append({
+                        "custom_id": result.custom_id,
+                        "type": "succeeded",
+                        "response": parsed_response,  # ← Parsed JSON dict
+                        "raw_message": message,  # Keep for debugging/usage stats
+                        "usage": message.usage  # Token usage including cache stats
+                    })
+                case "errored":
+                    logger.error(f"Result for {result.custom_id} errored: {result.result.error}")
+                    results.append({
+                        "custom_id": result.custom_id,
+                        "type": "errored",
+                        "error": result.result.error
+                    })
+                case "canceled":
+                    logger.warning(f"Result for {result.custom_id} was canceled")
+                    results.append({
+                        "custom_id": result.custom_id,
+                        "type": "canceled"
+                    })
+                case "expired":
+                    logger.warning(f"Result for {result.custom_id} expired")
+                    results.append({
+                        "custom_id": result.custom_id,
+                        "type": "expired"
+                    })
+                case _:
+                    logger.warning(f"Unexpected result type for {result.custom_id}: {result.result.type}")
+                    results.append({
+                        "custom_id": result.custom_id,
+                        "type": "unknown"
+                    })
+
+        logger.info(f"Retrieved {len(results)} results from batch {batch_id}")
+        return {**state, "responses": results, "status": "batch-completed"}
+
+    except Exception as e:
+        logger.error(f"Error retrieving results for batch {batch_id}: {e}")
+        return {**state, "status": "batch-results-failed", "error": str(e)}
 
 def process_draft_responses(state: PRPDraftState) -> PRPDraftState:
     """Process batch responses into structured review comments and proposed tasks.
 
-    TODO (Production): Implement full response processing:
-      1. Parse each response's content (JSON with proposed_tasks, atomicity, delegation_suggestions)
-      2. Extract proposed_tasks from each agent's response
-      3. Aggregate delegation_suggestions across all agents
-      4. Identify conflicts and overlaps in task decompositions
-      5. Build unified proposed_tasks list with agent attribution
-      6. Generate review_comments with agent feedback and concerns
-      7. Handle malformed JSON responses gracefully
-      8. Score task quality (atomicity, completeness, testability)
+    Aggregates proposed tasks and delegation suggestions from all agent responses.
+    Adds source agent attribution and calculates token usage statistics.
+
+    TODO (Future):
+      - Identify conflicts and overlaps in task decompositions
+      - Score task quality (atomicity, completeness, testability)
+      - Merge duplicate delegation suggestions intelligently
     """
-    # Stub: Minimal processing for testing
     responses = state.get("responses", []) or []
-    comments = state.get("review_comments", []) or []
 
-    if not comments and responses:
-        comments = [{"agent": "system", "note": f"Processed {len(responses)} responses."}]
-        logger.info("STUB: Processed %d responses into placeholder comments", len(responses))
-        logger.warning("TODO: Replace stub with real JSON parsing and task aggregation")
+    # ACCUMULATE results across iterations - preserve previous data
+    all_proposed_tasks: List[Dict[str, Any]] = list(state.get("proposed_tasks", []))
+    all_delegation_suggestions: List[Dict[str, Any]] = list(state.get("delegation_suggestions", []))
+    review_comments: List[Dict[str, Any]] = list(state.get("review_comments", []))
+    all_agent_responses: List[Dict[str, Any]] = list(state.get("agent_responses", []))  # Complete JSON from each agent
 
-    return {**state, "review_comments": comments}
+    # Token usage accumulates across iterations
+    prev_token_usage = state.get("token_usage", {})
+    total_cache_write_tokens = prev_token_usage.get("cache_write_tokens", 0)
+    total_cache_read_tokens = prev_token_usage.get("cache_read_tokens", 0)
+    total_output_tokens = prev_token_usage.get("output_tokens", 0)
+
+    current_iteration = state.get("current_iteration", 1)
+    tasks_before = len(all_proposed_tasks)
+    delegations_before = len(all_delegation_suggestions)
+
+    logger.info(f"Processing {len(responses)} agent responses from iteration {current_iteration}")
+    logger.info(f"Starting with {tasks_before} accumulated tasks, {delegations_before} accumulated delegations")
+
+    for response in responses:
+        custom_id = response.get("custom_id", "unknown")
+        agent_name = custom_id.split("-")[0] if "-" in custom_id else custom_id
+
+        if response.get("type") == "succeeded":
+            data = response.get("response", {})
+            usage = response.get("usage")
+
+            # Store COMPLETE agent response with metadata (ALL fields preserved)
+            current_iteration = state.get("current_iteration", 1)
+            all_agent_responses.append({
+                "agent": agent_name,
+                "iteration": current_iteration,
+                "custom_id": custom_id,
+                "response": data,  # Complete JSON from agent (ALL fields)
+                "usage": usage
+            })
+
+            # Debug: Log response structure
+            if data:
+                logger.debug(f"Agent {agent_name} response keys: {list(data.keys())}")
+                tasks_preview = data.get("proposed_tasks", [])
+                if tasks_preview and len(tasks_preview) > 0:
+                    logger.debug(f"Agent {agent_name} first task type: {type(tasks_preview[0]).__name__}")
+                elif tasks_preview is not None:
+                    logger.debug(f"Agent {agent_name} has empty proposed_tasks list")
+            else:
+                logger.warning(f"Agent {agent_name} returned empty parsed response")
+
+            # Track token usage
+            if usage:
+                # Cache creation tokens (1-hour TTL)
+                if hasattr(usage, 'cache_creation') and usage.cache_creation:
+                    total_cache_write_tokens += getattr(usage.cache_creation, 'ephemeral_1h_input_tokens', 0)
+                # Cache read tokens
+                total_cache_read_tokens += getattr(usage, 'cache_read_input_tokens', 0)
+                # Output tokens
+                total_output_tokens += getattr(usage, 'output_tokens', 0)
+
+            # Extract proposed tasks with source attribution and iteration tracking
+            current_iteration = state.get("current_iteration", 1)
+            tasks = data.get("proposed_tasks", [])
+            for task in tasks:
+                if isinstance(task, dict):
+                    # Create a copy with source attribution and iteration number
+                    task_with_metadata = {
+                        **task,
+                        "source_agent": agent_name,
+                        "iteration": current_iteration
+                    }
+                    all_proposed_tasks.append(task_with_metadata)
+                else:
+                    logger.warning(f"Agent {agent_name} returned non-dict task (type: {type(task).__name__}): {task}")
+                    # Try to salvage as a string description
+                    all_proposed_tasks.append({
+                        "objective": str(task),
+                        "source_agent": agent_name,
+                        "iteration": current_iteration,
+                        "malformed": True
+                    })
+
+            # Extract delegation suggestions
+            delegations = data.get("delegation_suggestions", [])
+            logger.debug(f"Agent {agent_name} raw delegations: {delegations}")
+
+            for delegation in delegations:
+                if isinstance(delegation, dict):
+                    # Check if it has "agent" key (structured format)
+                    if "agent" in delegation:
+                        # Format: {"agent": "web-developer", "reason": "..."}
+                        all_delegation_suggestions.append({
+                            **delegation,
+                            "suggested_by": agent_name
+                        })
+                        logger.debug(f"  Extracted (structured): {delegation.get('agent')}")
+                    else:
+                        # Dict-key format: {"web-developer": "reason text"}
+                        # Each key is an agent name, value is the reason
+                        for agent_key, reason in delegation.items():
+                            all_delegation_suggestions.append({
+                                "agent": agent_key,
+                                "reason": reason,
+                                "suggested_by": agent_name
+                            })
+                            logger.debug(f"  Extracted (dict-key): {agent_key}")
+                elif isinstance(delegation, str):
+                    # String format: "web-developer: reason text"
+                    suggested_agent = delegation.split(":")[0].strip()
+                    all_delegation_suggestions.append({
+                        "agent": suggested_agent,
+                        "reason": delegation.split(":", 1)[1].strip() if ":" in delegation else "",
+                        "suggested_by": agent_name
+                    })
+                    logger.debug(f"  Extracted (string): {suggested_agent}")
+
+            # Create review comment with key info
+            atomicity = data.get("atomicity", {})
+            review_comments.append({
+                "agent": agent_name,
+                "is_atomic": atomicity.get("is_atomic", "unknown"),
+                "atomicity_reasons": atomicity.get("reasons", []),
+                "tasks_proposed": len(tasks),
+                "delegations_suggested": len(delegations),
+                "questions": data.get("Questions", [])
+            })
+
+            logger.info(f"Agent {agent_name}: {len(tasks)} tasks, {len(delegations)} delegation suggestions")
+
+        elif response.get("type") == "errored":
+            error = response.get("error", "Unknown error")
+            logger.error(f"Agent {agent_name} response errored: {error}")
+            review_comments.append({
+                "agent": agent_name,
+                "status": "error",
+                "error": str(error)
+            })
+
+        else:
+            logger.warning(f"Agent {agent_name} response status: {response.get('type')}")
+            review_comments.append({
+                "agent": agent_name,
+                "status": response.get("type", "unknown")
+            })
+
+    # Log iteration statistics - show NEW vs TOTAL
+    tasks_added = len(all_proposed_tasks) - tasks_before
+    delegations_added = len(all_delegation_suggestions) - delegations_before
+
+    logger.info(f"Iteration {current_iteration} results: +{tasks_added} tasks, +{delegations_added} delegations from {len(responses)} agents")
+    logger.info(f"Total accumulated: {len(all_proposed_tasks)} tasks, {len(all_delegation_suggestions)} delegations")
+    logger.info(f"Token usage (cumulative) - Cache writes: {total_cache_write_tokens}, Cache reads: {total_cache_read_tokens}, Output: {total_output_tokens}")
+
+    unique_delegations = len(set(d.get("agent", "") for d in all_delegation_suggestions if d.get("agent")))
+    logger.info(f"Unique agents suggested across all iterations: {unique_delegations}")
+    logger.info(f"Total complete agent responses stored: {len(all_agent_responses)}")
+
+    return {
+        **state,
+        "proposed_tasks": all_proposed_tasks,
+        "delegation_suggestions": all_delegation_suggestions,
+        "review_comments": review_comments,
+        "agent_responses": all_agent_responses,  # Complete JSON from ALL agents
+        "status": "responses-processed",
+        "token_usage": {
+            "cache_write_tokens": total_cache_write_tokens,
+            "cache_read_tokens": total_cache_read_tokens,
+            "output_tokens": total_output_tokens
+        }
+    }
 
 def draft_agent_feedback_loop(state: PRPDraftState) -> PRPDraftState:
     """Agent feedback iteration loop for refining task decomposition.
 
-    TODO (Production): Implement multi-iteration feedback refinement:
-      1. Check delegation_suggestions to identify additional required agents
-      2. Load suggested agents and construct new batch requests
-      3. Re-run batch submission and retrieval for new agents
-      4. Merge new responses with existing proposed_tasks
-      5. Track iteration count against max_iterations limit
-      6. Implement convergence detection (no new delegations suggested)
-      7. Add circuit breaker for excessive iteration
-      8. Generate final consolidated task list across all iterations
-      9. Score final task decomposition quality
-     10. Update prp_draft_file with refined content
+    Checks delegation_suggestions for new agents and determines if another
+    iteration is needed. Updates state with new agents list and iteration count.
     """
-    # Stub: No-op for testing - just pass through
-    current_status = state.get("status", "draft-processed")
-    logger.info("STUB: Agent feedback loop - no-op, status=%s", current_status)
-    logger.warning("TODO: Replace stub with multi-iteration agent feedback refinement")
+    current_iteration = state.get("current_iteration", 1)
+    max_iterations = state.get("max_iterations", 3)
+    delegation_suggestions = state.get("delegation_suggestions", [])
+    current_agents = set(state.get("agents", []))
 
-    return {**state, "status": current_status}
+    # Extract unique suggested agent names
+    suggested_agents = set()
+    for suggestion in delegation_suggestions:
+        agent_name = suggestion.get("agent", "").strip()
+        if agent_name:
+            suggested_agents.add(agent_name)
+
+    # Filter for NEW agents (not already processed)
+    new_agents = suggested_agents - current_agents
+
+    logger.info(f"Iteration {current_iteration}/{max_iterations}: "
+                f"Found {len(suggested_agents)} suggested agents, "
+                f"{len(new_agents)} are new")
+
+    # Check if we should continue iterating
+    if not new_agents:
+        logger.info("No new agents suggested - converged")
+        return {**state, "status": "converged", "should_continue": False}
+
+    if current_iteration >= max_iterations:
+        logger.warning(f"Reached max iterations ({max_iterations}), stopping despite {len(new_agents)} new agents")
+        return {**state, "status": "max-iterations-reached", "should_continue": False}
+
+    # Prepare for next iteration
+    logger.info(f"Starting iteration {current_iteration + 1} with new agents: {sorted(new_agents)}")
+
+    # Update agents list with new agents
+    updated_agents = list(current_agents | new_agents)
+
+    return {
+        **state,
+        "agents": updated_agents,
+        "current_iteration": current_iteration + 1,
+        "status": "iterating",
+        "should_continue": True
+    }
 
 # Main Graph
 def initialize_node(state: PRPState) -> PRPState:
@@ -1062,21 +1425,26 @@ def run_draft_phase(state: PRPState) -> PRPState:
         "doc_embedding_model": state.get("doc_embedding_model", ""),
         "doc_embedding_dim": state.get("doc_embedding_dim", 0),
         "model": MODEL_ID,
-        "agents": BASE_AGENTS
+        "agents": BASE_AGENTS,
+        "agents_processed": [],
+        "max_iterations": 3,
+        "current_iteration": 1
     }
 
     draft_workflow = build_draft_subgraph()
     draft_result: PRPDraftState = draft_workflow.invoke(draft_state)
 
-    # Merge any draft artifacts you want back into PRPState
+    # Merge draft artifacts back into PRPState
     merged : PRPState = {
         **state,
         "draft_files": state.get("draft_files", []),
         "status": draft_result.get("status", "batch-processed"),
         "responses": draft_result.get("responses", []),
         "review_comments": draft_result.get("review_comments", []),
-        
-        # Add any material you decide to surface, e.g. 'proposed_tasks'
+        "proposed_tasks": draft_result.get("proposed_tasks", []),
+        "delegation_suggestions": draft_result.get("delegation_suggestions", []),
+        "agent_responses": draft_result.get("agent_responses", []),  # Complete JSON from all agents
+        "token_usage": draft_result.get("token_usage", {})
     }
     return merged
 
@@ -1102,11 +1470,24 @@ def build_workflow() -> Any:
 
     return graph.compile()
 
+def should_continue_iteration(state: PRPDraftState) -> str:
+    """Determine if feedback loop should continue iterating.
+
+    Returns:
+        "continue" if should loop back to build_batch_requests
+        "end" if should finish
+    """
+    should_continue = state.get("should_continue", False)
+    return "continue" if should_continue else "end"
+
+
 def build_draft_subgraph() -> Any:
     """Assemble and compile the DraftPRP subgraph.
 
-    Flow:
-        START -> load_prp -> submit_draft_prp -> END
+    Flow with feedback loop:
+        START -> initialize -> build_batch_requests -> submit_draft_prp ->
+        retrieve_responses -> process_responses -> agent_feedback_loop ->
+        [conditional: continue back to build_batch_requests OR end]
     """
     graph = StateGraph(PRPDraftState)
     graph.add_node("initialize", load_prp)
@@ -1114,17 +1495,25 @@ def build_draft_subgraph() -> Any:
     graph.add_node("submit_draft_prp", submit_draft_prp)
     graph.add_node("retrieve_responses", retrieve_claude_batch)
     graph.add_node("process_responses", process_draft_responses)
-    graph.add_node("agent_feedback_loop", draft_agent_feedback_loop) # Takes agent suggestions and runs feedback iterations
+    graph.add_node("agent_feedback_loop", draft_agent_feedback_loop)
 
-    
-
+    # Linear edges through the workflow
     graph.add_edge(START, "initialize")
     graph.add_edge("initialize", "build_batch_requests")
     graph.add_edge("build_batch_requests", "submit_draft_prp")
     graph.add_edge("submit_draft_prp", "retrieve_responses")
     graph.add_edge("retrieve_responses", "process_responses")
     graph.add_edge("process_responses", "agent_feedback_loop")
-    graph.add_edge("agent_feedback_loop", END)
+
+    # Conditional edge: loop back or end
+    graph.add_conditional_edges(
+        "agent_feedback_loop",
+        should_continue_iteration,
+        {
+            "continue": "build_batch_requests",  # Loop back for next iteration
+            "end": END  # Finish workflow
+        }
+    )
 
     return graph.compile()
 

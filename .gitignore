@@ -43,6 +43,8 @@ env/
 .langgraph/state_cache/
 .langgraph/metrics/
 .langgraph/logs/
+.emb_cache/
+
 
 # Test coverage
 .coverage
@@ -66,6 +68,7 @@ temp/
 # Project-specific
 prp/drafts/*.json
 prp/active/*.json
+prp/raw/*
 archive/
 .emb_cache/*
 result.json

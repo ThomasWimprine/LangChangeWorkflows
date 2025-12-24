@@ -682,7 +682,7 @@ def validate_custom_gate(state, config, context_optimizer):
 
 # Use from any project:
 cd ~/my-project
-python3 ~/Repositories/LangChangeWorkflows/examples/auto_detect_runner.py
+python3 ~/Repositories/LangChainWorkflows/examples/auto_detect_runner.py
 ```
 
 ---
@@ -717,7 +717,7 @@ To:
 2. **Try on a real project:**
    ```bash
    cd ~/my-project
-   python3 ~/Repositories/LangChangeWorkflows/examples/auto_detect_runner.py
+   python3 ~/Repositories/LangChainWorkflows/examples/auto_detect_runner.py
    ```
 
 3. **Extend with custom gates:**

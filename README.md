@@ -67,7 +67,7 @@ git checkout v0.1.0-backup-complex
 ## Project Structure
 
 ```
-LangChangeWorkflows/
+LangChainWorkflows/
 ├── lessons/              # Step-by-step learning modules
 │   ├── 00-setup/        # Environment setup
 │   ├── 01-hello-langgraph/  # First workflow (in progress)
@@ -89,7 +89,7 @@ LangChangeWorkflows/
 1. **Clone the repository**:
    ```bash
    git clone <repository-url>
-   cd LangChangeWorkflows
+   cd LangChainWorkflows
    ```
 
 2. **Create virtual environment**:

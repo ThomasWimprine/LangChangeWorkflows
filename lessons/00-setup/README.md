@@ -25,7 +25,7 @@ If Python is not installed, download from [python.org](https://www.python.org/do
 
 ```bash
 git clone <your-repository-url>
-cd LangChangeWorkflows
+cd LangChainWorkflows
 ```
 
 ### 3. Create Virtual Environment
