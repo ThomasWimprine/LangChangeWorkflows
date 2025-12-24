@@ -66,10 +66,8 @@ temp/
 *.bak
 
 # Project-specific
-prp/drafts/*.json
-prp/active/*.json
-prp/raw/*
+prp/**/*
 archive/
 .emb_cache/*
 result.json
-logs/*
+logs/**/*

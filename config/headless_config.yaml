@@ -1,0 +1,192 @@
+# Headless Workflow Configuration
+# Complete configuration for automated PRP execution with validation layers
+
+# Mode: "batch" (one pass) or "loop" (continuous)
+mode: batch
+
+# PRP discovery settings (where to look for drafts/active PRPs inside the project)
+prp_discovery:
+  drafts_dir: "prp/drafts"
+  active_dir: "prp/active"
+
+# Batch Operation Settings
+batch_operation:
+  loop_interval: 600 # 10 minutes (600 seconds)
+
+  # Directories to scan for PRPs
+  scan_directories:
+    - prp/drafts # PRPs that need /generate-prp first
+    - prp/active # PRPs ready for /execute-prp
+
+  # Patterns to exclude from scanning
+  exclude_patterns:
+    - "DRAFT-*" # Already processed drafts
+    - "*-RESEARCH.md" # Research artifacts
+    - "*-ARCHITECTURE-REVIEW.md" # Architecture reviews
+    - "*-SECURITY-ASSESSMENT.md" # Security assessments
+    - "*-CONSULTATION.md" # Specialist consultations
+    - "*SUMMARY*" # Summary documents
+
+  # Behavior
+  stop_on_failure: false # Continue processing other PRPs on failure
+  state_file: "prp/state.json" # Persistent state storage (per project)
+
+# Validation Layer Settings
+validation:
+  # Layer 3: Embedding Similarity
+  embedding_similarity_threshold: 0.9 # High fidelity required (0.9 = faithful, not just similar)
+
+  # Layer toggles
+  reading_check_enabled: true
+  pydantic_validation_enabled: true
+  embedding_similarity_enabled: true
+  consistency_check_enabled: true
+
+  # Retry behavior
+  max_validation_retries: 3
+  retry_delay: 5 # seconds
+
+  # LLM settings for validation
+  llm:
+    provider: "anthropic"
+    model: "claude-sonnet-4-5"
+    temperature: 0.0 # Deterministic for validation
+    max_tokens: 4096
+    timeout: 120 # seconds
+
+  # Embedding settings
+  embedding:
+    provider: "openai"
+    model: "text-embedding-3-small"
+    dimensions: 1536
+    batch_size: 100
+
+# CI/CD Gate Settings
+cicd:
+  max_retry_attempts: 3
+  gate_timeout: 300 # 5 minutes per gate check
+  check_interval: 30 # Check status every 30 seconds
+
+  # All 6 required gates (per CLAUDE.md)
+  required_gates:
+    - gate1_tdd # TDD cycle verification (RED-GREEN-REFACTOR)
+    - gate2_mocks # Mock detection (zero in src/)
+    - gate3_contracts # API contract validation
+    - gate4_coverage # Test coverage (100%)
+    - gate5_mutation # Mutation testing (≥95%)
+    - gate6_security # Security scan (zero HIGH/CRITICAL)
+
+  # Gate-specific settings
+  gates:
+    gate4_coverage:
+      minimum_percentage: 100 # 100% coverage required
+      fail_under: 100
+
+    gate5_mutation:
+      minimum_score: 95 # ≥95% mutation score required
+
+    gate6_security:
+      block_on_severity:
+        - CRITICAL
+        - HIGH
+      allow_severity:
+        - MEDIUM
+        - LOW
+        - INFO
+
+# Agent Settings
+agents:
+  # Agent registry location
+  agent_dirs:
+    - "~/.claude/agents" # Primary agent registry
+
+  # Agent selection
+  default_agents:
+    architecture: "architect-reviewer"
+    security: "security-reviewer"
+    testing: "test-automation"
+    backend: "nodejs-developer"
+    frontend: "react-developer"
+    devops: "devops-engineer"
+
+  # Execution settings
+  max_agent_retries: 3
+  agent_timeout: 600 # 10 minutes per agent task
+
+# Logging Settings
+logging:
+  level: "INFO" # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s | %(levelname)s | %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+
+  # Log files
+  files:
+    main_log: "~/tmp/orgcash-headless.log"
+    audit_log: "~/tmp/orgcash-headless-audit.log"
+    error_log: "~/tmp/orgcash-headless-errors.log"
+
+  # Log rotation
+  rotation:
+    max_bytes: 10485760 # 10 MB
+    backup_count: 5
+
+# Performance Settings
+performance:
+  # Parallel execution (disabled per instructions.md - sequential only)
+  parallel_enabled: false
+  max_concurrent_prps: 1 # Sequential processing only
+
+  # Resource limits
+  max_memory_mb: 2048
+  max_cpu_percent: 80
+
+  # Timeouts
+  prp_execution_timeout: 3600 # 1 hour per PRP
+  test_execution_timeout: 600 # 10 minutes for tests
+  build_timeout: 300 # 5 minutes for builds
+
+# GitHub Integration
+github:
+  # PR settings
+  auto_create_pr: true
+  auto_merge_on_green: false # Require manual approval
+  pr_draft_mode: false
+
+  # Branch naming
+  branch_prefix: "feature"
+  branch_format: "{prefix}/{prp_id}-{prp_name}"
+
+  # Commit message format
+  commit_format: "conventional" # conventional commits
+
+# Monitoring and Alerting
+monitoring:
+  enabled: true
+  metrics_file: "~/tmp/orgcash-headless-metrics.json"
+
+  # Metrics to track
+  track:
+    - prp_execution_time
+    - validation_pass_rate
+    - gate_failure_rate
+    - retry_count
+    - success_rate
+
+  # Alerting (placeholder for future)
+  alerts:
+    enabled: false
+    email_on_failure: false
+    slack_webhook: null
+
+# Emergency Settings
+emergency:
+  # Circuit breaker
+  max_consecutive_failures: 5 # Stop after 5 consecutive PRP failures
+  cooldown_period: 3600 # 1 hour cooldown after circuit break
+
+  # Emergency stop conditions
+  stop_on:
+    - critical_security_vulnerability
+    - git_repository_corruption
+    - ci_cd_pipeline_down
+    - auth_failure

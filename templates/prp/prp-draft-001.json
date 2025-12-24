@@ -1,5 +1,6 @@
 {
     "agent": "<agent_name>",
+    "description": "One paragraph describing the proposed task in detail.",
     "atomicity": {
         "is_atomic": true|false,
         "reasons": [
