@@ -7,6 +7,7 @@ import os
 import json
 import argparse
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
@@ -591,6 +592,18 @@ def _gather_project_context() -> str:
     return "\n\n".join(context_parts) if context_parts else ""
 
 
+def _list_known_agent_ids() -> set[str]:
+    """Return available agent IDs from AGENT_DIRS (stems of *.md files)."""
+    ids: set[str] = set()
+    for base in AGENT_DIRS:
+        try:
+            for path in Path(base).glob("*.md"):
+                ids.add(path.stem)
+        except Exception:
+            continue
+    return ids
+
+
 ## Workflow Nodes
 
 def initialize_node(state: PRPDraftState) -> PRPDraftState:
@@ -1041,10 +1054,25 @@ def prepare_followup_node(state: PRPDraftState) -> PRPDraftState:
 
     # Simple filter: only query agents we haven't seen yet
     to_query: set[str] = set()
+    known_agents = _list_known_agent_ids()
+    dropped_task_ids: list[str] = []
+    dropped_unknown: list[str] = []
+
     for name in suggestions:
         # Just use the name as-is (simplified - no normalization)
         if name and name not in agents_seen:
+            if re.match(r"^t-[^-]+-\d+", name):
+                dropped_task_ids.append(name)
+                continue
+            if known_agents and name not in known_agents:
+                dropped_unknown.append(name)
+                continue
             to_query.add(name)
+
+    if dropped_task_ids:
+        logger.info(f"Dropped task-like suggestions (not agents): {', '.join(sorted(set(dropped_task_ids)))}")
+    if dropped_unknown:
+        logger.info(f"Skipped unknown agents (not in registry): {', '.join(sorted(set(dropped_unknown)))}")
 
     if to_query:
         logger.info(f"Followup agents ({len(to_query)}): {', '.join(sorted(to_query))}")
