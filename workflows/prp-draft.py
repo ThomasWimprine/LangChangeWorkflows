@@ -12,6 +12,9 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 
+# Agent loader (reuse registry discovery)
+from workflows.agents.agent_loader import discover_agents
+
 # Workflow location (where this script lives) vs target project root (resolved at runtime)
 SCRIPT_DIR = Path(__file__).parent
 WORKFLOW_ROOT = SCRIPT_DIR
@@ -592,18 +595,6 @@ def _gather_project_context() -> str:
     return "\n\n".join(context_parts) if context_parts else ""
 
 
-def _list_known_agent_ids() -> set[str]:
-    """Return available agent IDs from AGENT_DIRS (stems of *.md files)."""
-    ids: set[str] = set()
-    for base in AGENT_DIRS:
-        try:
-            for path in Path(base).glob("*.md"):
-                ids.add(path.stem)
-        except Exception:
-            continue
-    return ids
-
-
 ## Workflow Nodes
 
 def initialize_node(state: PRPDraftState) -> PRPDraftState:
@@ -1054,7 +1045,8 @@ def prepare_followup_node(state: PRPDraftState) -> PRPDraftState:
 
     # Simple filter: only query agents we haven't seen yet
     to_query: set[str] = set()
-    known_agents = _list_known_agent_ids()
+    agent_dirs = [str(Path(d).expanduser()) for d in AGENT_DIRS]
+    known_agents = {a.agent_id for a in discover_agents(agent_dirs)}
     dropped_task_ids: list[str] = []
     dropped_unknown: list[str] = []
 
