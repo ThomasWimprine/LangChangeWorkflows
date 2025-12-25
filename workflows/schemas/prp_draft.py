@@ -31,7 +31,8 @@ class Question(BaseModel):
 
 class Draft001(BaseModel):
     """Schema matching templates/prp/prp-draft-001.json structure."""
-    model_config = ConfigDict(extra="forbid")
+    # Allow 'questions' (lowercase) as alias for 'Questions' since Claude may use either
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     agent: str
     description: str
@@ -41,4 +42,5 @@ class Draft001(BaseModel):
     split_recommendation: List[Dict[str, str]] = Field(default_factory=list)
     # Template uses objects like {"agent-name": "reason"} not plain strings
     delegation_suggestions: List[Dict[str, str]] = Field(default_factory=list)
-    Questions: List[Question] = Field(default_factory=list)
+    # Accept both 'Questions' and 'questions' since Claude may use either case
+    Questions: List[Question] = Field(default_factory=list, alias="questions")
