@@ -8,12 +8,14 @@ import json
 import argparse
 import logging
 import re
+from pydantic import ValidationError
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 
 # Agent loader (reuse registry discovery)
 from workflows.agents.agent_loader import discover_agents
+from workflows.schemas.prp_draft import Draft001
 
 # Workflow location (where this script lives) vs target project root (resolved at runtime)
 SCRIPT_DIR = Path(__file__).parent
@@ -975,26 +977,27 @@ def process_results_node(state: PRPDraftState) -> PRPDraftState:
             logger.warning(f" {agent_tag} returned non-JSON output (saved to {raw_path})")
             continue
 
-        # Check if response has required fields
-        has_atomicity = "atomicity" in data or "is_atomic" in data
-        has_tasks = "proposed_tasks" in data
-        has_suggestions = "delegation_suggestions" in data
+        # Validate against strict schema
+        try:
+            validated = Draft001.model_validate(data)
+        except ValidationError as ve:
+            logger.error(f" {agent_tag} response failed schema validation:")
+            for err in ve.errors():
+                logger.error(f"   {err['loc']}: {err['msg']}")
+            logger.error(f"   Raw saved to: {raw_path}")
+            continue
 
-        if not (has_atomicity and has_tasks):
-            logger.warning(f" {agent_tag} returned incomplete JSON (atomicity:{has_atomicity}, tasks:{has_tasks}, suggestions:{has_suggestions})")
-            logger.warning(f"      Raw response saved to: {raw_path}")
-
-        # Save to prp/drafts (save everything, even incomplete)
+        # Save validated payload
         draft_path = draft_dir / f"{timestamp}-{agent_tag}.json"
-        draft_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        draft_path.write_text(validated.model_dump_json(indent=2), encoding="utf-8")
         draft_files.append(str(draft_path))
         logger.info(f"Saved: {draft_path}")
 
         # Extract delegation suggestions
-        suggested |= _extract_suggested_agents(data)
+        suggested |= _extract_suggested_agents(validated.model_dump())
         consolidated_data.append({
             "agent": agent_tag,
-            "response": data
+            "response": validated.model_dump()
         })
 
     logger.info(f"Delegation suggestions: {', '.join(sorted(suggested))}")
