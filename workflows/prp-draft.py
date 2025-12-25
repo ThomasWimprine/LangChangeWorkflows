@@ -257,7 +257,8 @@ def _build_agent_catalog(max_lines: int = 50) -> str:
 
 def _load_template() -> str:
     """Load the PRP draft template from templates directory."""
-    template_path = WORKFLOW_ROOT / "templates" / "prp" / "prp-draft-001.json"
+    # Templates are in the workflow repo (SCRIPT_DIR parent), not the calling project
+    template_path = SCRIPT_DIR.parent / "templates" / "prp" / "prp-draft-001.json"
 
     if not template_path.exists():
         # Fallback to inline schema if template file doesn't exist
@@ -302,7 +303,8 @@ def _load_template() -> str:
 
 def _load_prp_prompt() -> str:
     """Load the PRP draft prompt from prompts directory."""
-    prompt_path = WORKFLOW_ROOT / "prompts" / "prp" / "prp-draft-001.md"
+    # Prompts are in the workflow repo (SCRIPT_DIR parent), not the calling project
+    prompt_path = SCRIPT_DIR.parent / "prompts" / "prp" / "prp-draft-001.md"
     if not prompt_path.exists():
         # Fallback to basic prompt
         return (

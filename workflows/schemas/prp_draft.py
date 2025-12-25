@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -30,12 +30,15 @@ class Question(BaseModel):
 
 
 class Draft001(BaseModel):
+    """Schema matching templates/prp/prp-draft-001.json structure."""
     model_config = ConfigDict(extra="forbid")
 
     agent: str
     description: str
     atomicity: Atomicity
     proposed_tasks: List[ProposedTask] = Field(..., min_length=1)
-    split_recommendation: List[str] = Field(default_factory=list)
-    delegation_suggestions: List[str] = Field(default_factory=list)
+    # Template uses objects like {"t-001": "description"} not plain strings
+    split_recommendation: List[Dict[str, str]] = Field(default_factory=list)
+    # Template uses objects like {"agent-name": "reason"} not plain strings
+    delegation_suggestions: List[Dict[str, str]] = Field(default_factory=list)
     Questions: List[Question] = Field(default_factory=list)
