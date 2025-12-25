@@ -11,9 +11,38 @@ from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 
-# Get project root (parent of workflows/)
+# Workflow location (where this script lives) vs target project root (resolved at runtime)
 SCRIPT_DIR = Path(__file__).parent
-PROJECT_ROOT = SCRIPT_DIR.parent
+WORKFLOW_ROOT = SCRIPT_DIR
+
+
+def detect_project_root(feature_arg: str) -> Path:
+    """
+    Resolve the target project root automatically.
+
+    Priority:
+      1) PRP_PROJECT_ROOT env var (explicit override)
+      2) If feature_arg is a file under a "prp/" directory, use that directory's parent
+      3) Fallback to current working directory
+    """
+    env_root = os.environ.get("PRP_PROJECT_ROOT")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+
+    candidate = Path(feature_arg).expanduser()
+    if not candidate.is_absolute():
+        candidate = (Path.cwd() / candidate).resolve()
+
+    if candidate.exists():
+        for parent in candidate.parents:
+            if parent.name == "prp":
+                return parent.parent.resolve()
+
+    return Path.cwd().resolve()
+
+
+# Will be overwritten in main via detect_project_root
+PROJECT_ROOT = Path.cwd().resolve()
 
 # Set up logger
 logger = logging.getLogger("prp-draft")
@@ -222,7 +251,7 @@ def _build_agent_catalog(max_lines: int = 50) -> str:
 
 def _load_template() -> str:
     """Load the PRP draft template from templates directory."""
-    template_path = PROJECT_ROOT / "templates" / "prp" / "prp-draft-001.json"
+    template_path = WORKFLOW_ROOT / "templates" / "prp" / "prp-draft-001.json"
 
     if not template_path.exists():
         # Fallback to inline schema if template file doesn't exist
@@ -267,7 +296,7 @@ def _load_template() -> str:
 
 def _load_prp_prompt() -> str:
     """Load the PRP draft prompt from prompts directory."""
-    prompt_path = PROJECT_ROOT / "prompts" / "prp" / "prp-draft-001.md"
+    prompt_path = WORKFLOW_ROOT / "prompts" / "prp" / "prp-draft-001.md"
     if not prompt_path.exists():
         # Fallback to basic prompt
         return (
@@ -474,6 +503,7 @@ def _gather_project_context() -> str:
         ('README.md', PROJECT_ROOT / "README.md", False),  # Single file
         ('CLAUDE.md (local)', PROJECT_ROOT / "CLAUDE.md", False),  # Single file
         ('CLAUDE.md (global)', Path.home() / ".claude" / "CLAUDE.md", False),  # Single file
+        ('INITIAL.md', PROJECT_ROOT / "INITIAL.md", False),
         ('docs/', PROJECT_ROOT / "docs", True),  # Recursive directory
         ('contracts/', PROJECT_ROOT / "contracts", True),
         ('database/', PROJECT_ROOT / "database", True),
@@ -483,6 +513,15 @@ def _gather_project_context() -> str:
         ('terraform/', PROJECT_ROOT / "terraform", True),
         ('tests/', PROJECT_ROOT / "tests", True),
         ('validation/', PROJECT_ROOT / "validation", True),
+        # Common app stacks (included only if they exist)
+        ('website/', PROJECT_ROOT / "website", True),
+        ('lambda/', PROJECT_ROOT / "lambda", True),
+        ('src/', PROJECT_ROOT / "src", True),
+        ('app/', PROJECT_ROOT / "app", True),
+        ('frontend/', PROJECT_ROOT / "frontend", True),
+        ('backend/', PROJECT_ROOT / "backend", True),
+        ('infrastructure/', PROJECT_ROOT / "infrastructure", True),
+        ('infra/', PROJECT_ROOT / "infra", True),
     ]
 
     for label, path, is_dir in scan_order:
@@ -570,6 +609,8 @@ def initialize_node(state: PRPDraftState) -> PRPDraftState:
 
     # Get initial agents to query (from state or use BASE_AGENTS)
     agents = state.get("agents_to_query", []) or BASE_AGENTS
+
+    logger.info(f"Project root: {PROJECT_ROOT}")
 
     # Gather project context (README + tech stack)
     project_context = _gather_project_context()
@@ -1211,11 +1252,6 @@ def build_workflow() -> StateGraph:
 def main() -> int:
     """CLI entrypoint for PRP Draft workflow."""
     # Load environment variables
-    try:
-        load_dotenv(find_dotenv(usecwd=True), override=False)
-    except Exception:
-        pass
-
     # Parse arguments
     parser = argparse.ArgumentParser(
         description="PRP Draft Workflow - Phase 1: Panel Decomposition"
@@ -1247,11 +1283,23 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    # Resolve project root before reading feature or .env
+    feature_arg = args.feature or "prp/idea.md"
+    project_root = detect_project_root(feature_arg)
+    global PROJECT_ROOT
+    PROJECT_ROOT = project_root
+
+    # Load environment from detected project root
+    try:
+        load_dotenv(PROJECT_ROOT / ".env", override=False)
+    except Exception:
+        pass
+
     # Set up logging
     setup_logging(log_file=args.log_file)
 
     # Load feature description
-    feature = args.feature or str(PROJECT_ROOT / "prp" / "idea.md")
+    feature = feature_arg
 
     # If feature is a path, read the file
     feature_path = Path(feature)
@@ -1326,5 +1374,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
