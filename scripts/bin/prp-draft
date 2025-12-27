@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Wrapper for prp-draft.py workflow
+# Usage: prp-draft "Feature description" [--project /path/to/project]
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKFLOW_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+VENV_PYTHON="$WORKFLOW_ROOT/.venv/bin/python"
+SCRIPT="$WORKFLOW_ROOT/workflows/prp-draft.py"
+
+if [[ ! -f "$VENV_PYTHON" ]]; then
+    echo "Error: Virtual environment not found at $WORKFLOW_ROOT/.venv"
+    echo "Run: cd $WORKFLOW_ROOT && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
+    exit 1
+fi
+
+exec "$VENV_PYTHON" "$SCRIPT" "$@"

@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# PRP Workflow CLI
+# Usage:
+#   prp draft "Feature description" [--project /path]
+#   prp workflow [options]
+#   prp help
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKFLOW_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+VENV_PYTHON="$WORKFLOW_ROOT/.venv/bin/python"
+
+show_help() {
+    cat << EOF
+PRP Workflow CLI
+
+Usage:
+  prp draft "Feature description"     Create a draft PRP for a feature
+  prp workflow [options]              Run batch workflow processing
+  prp help                            Show this help message
+
+Options for 'draft':
+  --project PATH    Target project directory (default: current directory)
+
+Examples:
+  prp draft "Add user authentication with JWT"
+  prp draft "Fix login bug" --project /path/to/project
+  prp workflow
+
+Environment:
+  WORKFLOW_ROOT: $WORKFLOW_ROOT
+  VENV_PYTHON:   $VENV_PYTHON
+EOF
+}
+
+if [[ $# -eq 0 ]] || [[ "$1" == "help" ]] || [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+    show_help
+    exit 0
+fi
+
+if [[ ! -f "$VENV_PYTHON" ]]; then
+    echo "Error: Virtual environment not found at $WORKFLOW_ROOT/.venv"
+    echo "Run: cd $WORKFLOW_ROOT && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
+    exit 1
+fi
+
+COMMAND="$1"
+shift
+
+case "$COMMAND" in
+    draft)
+        exec "$VENV_PYTHON" "$WORKFLOW_ROOT/workflows/prp-draft.py" "$@"
+        ;;
+    workflow)
+        exec "$VENV_PYTHON" "$WORKFLOW_ROOT/workflows/prp-workflow.py" "$@"
+        ;;
+    *)
+        echo "Unknown command: $COMMAND"
+        echo "Run 'prp help' for usage"
+        exit 1
+        ;;
+esac
