@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Git post-merge hook - auto-deploy after git pull
+#
+# Installation:
+#   ln -sf ../../scripts/hooks/post-merge .git/hooks/post-merge
+#
+# This hook runs after every git pull/merge and deploys
+# the updated code to ~/bin/workflows/prp
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Find repo root (works whether called from .git/hooks or scripts/hooks)
+if [[ -f "$SCRIPT_DIR/../../scripts/deploy.sh" ]]; then
+    REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+elif [[ -f "$SCRIPT_DIR/../deploy.sh" ]]; then
+    REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+else
+    echo "Warning: Could not find deploy.sh, skipping auto-deploy"
+    exit 0
+fi
+
+DEPLOY_SCRIPT="$REPO_ROOT/scripts/deploy.sh"
+
+# Check if deploy script exists
+if [[ ! -f "$DEPLOY_SCRIPT" ]]; then
+    echo "Warning: Deploy script not found at $DEPLOY_SCRIPT"
+    exit 0
+fi
+
+# Check if auto-deploy is enabled (can be disabled with: git config hooks.autodeploy false)
+AUTO_DEPLOY=$(git config --get hooks.autodeploy 2>/dev/null || echo "true")
+if [[ "$AUTO_DEPLOY" != "true" ]]; then
+    echo "Auto-deploy disabled (git config hooks.autodeploy = $AUTO_DEPLOY)"
+    exit 0
+fi
+
+echo ""
+echo "=== Auto-deploying to ~/bin/workflows/prp ==="
+echo ""
+
+# Run deploy script
+"$DEPLOY_SCRIPT"
+
+echo ""
+echo "Auto-deploy complete!"

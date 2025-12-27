@@ -1,0 +1,39 @@
+name: Deploy Ready
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run tests
+        run: |
+          python -m pytest tests/ -v --tb=short
+
+      - name: Verify deploy script
+        run: |
+          chmod +x scripts/deploy.sh
+          # Dry run - just check syntax
+          bash -n scripts/deploy.sh
+
+      - name: Create deployment marker
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "Ready for local deployment"
+          echo "Run: git pull && ./scripts/deploy.sh"
