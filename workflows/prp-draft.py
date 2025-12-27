@@ -8,14 +8,19 @@ import json
 import argparse
 import logging
 import re
+import yaml
 from pydantic import ValidationError
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 
+import numpy as np
+from openai import OpenAI
+
 # Agent loader (reuse registry discovery)
 from workflows.agents.agent_loader import discover_agents
 from workflows.schemas.prp_draft import Draft001
+from workflows.retrieval import SemanticContextRetriever, AgentContextConfig, _ensure_embedding_cache
 
 # Workflow location (where this script lives) vs target project root (resolved at runtime)
 SCRIPT_DIR = Path(__file__).parent
@@ -144,6 +149,11 @@ class PRPDraftState(TypedDict, total=False):
     compilation_status: Optional[str]
     draft_phase_complete: Optional[bool]
     generate_phase_complete: Optional[bool]
+
+    # Question tracking (iterative refinement)
+    pending_questions: list[dict]    # Questions awaiting answers
+    answered_questions: list[dict]   # Questions with answers
+    all_questions: list[dict]        # All questions seen (for deduplication)
 
 # Standalone agent registry
 AGENT_DIRS = [Path(os.path.expanduser("~/.claude/agents"))]
@@ -599,6 +609,220 @@ def _gather_project_context() -> str:
     return "\n\n".join(context_parts) if context_parts else ""
 
 
+# ============================================================================
+# SEMANTIC RETRIEVAL INTEGRATION (PRP-011)
+# ============================================================================
+
+# Global retriever instance (lazy-loaded)
+_semantic_retriever: Optional[SemanticContextRetriever] = None
+
+
+def _load_retrieval_config() -> dict:
+    """Load retrieval settings from headless_config.yaml."""
+    config_path = WORKFLOW_ROOT / "config" / "headless_config.yaml"
+    if not config_path.exists():
+        config_path = SCRIPT_DIR.parent / "config" / "headless_config.yaml"
+
+    if config_path.exists():
+        try:
+            with open(config_path, "r") as f:
+                config = yaml.safe_load(f)
+            return config.get("retrieval", {})
+        except Exception as e:
+            logger.warning(f"Failed to load retrieval config: {e}")
+
+    # Defaults from PRP-011
+    return {
+        "enabled": True,
+        "top_k": 30,
+        "similarity_threshold": 0.3,
+        "per_agent_context": True,
+        "baseline_max_chars": 15000,
+        "semantic_max_chars": 100000,
+        "cache_dir": ".emb_cache",
+    }
+
+
+def _get_semantic_retriever() -> Optional[SemanticContextRetriever]:
+    """Get or initialize the semantic retriever (lazy singleton)."""
+    global _semantic_retriever
+
+    if _semantic_retriever is not None:
+        return _semantic_retriever
+
+    config = _load_retrieval_config()
+    if not config.get("enabled", True):
+        logger.info("Semantic retrieval disabled in config")
+        return None
+
+    cache_dir = PROJECT_ROOT / config.get("cache_dir", ".emb_cache")
+    if not cache_dir.exists():
+        logger.warning(f"Embedding cache not found: {cache_dir}")
+        return None
+
+    try:
+        _semantic_retriever = SemanticContextRetriever(cache_dir=str(cache_dir))
+        logger.info(f"Semantic retriever loaded: {len(_semantic_retriever)} embeddings")
+        return _semantic_retriever
+    except Exception as e:
+        logger.warning(f"Failed to initialize semantic retriever: {e}")
+        return None
+
+
+def _embed_query(text: str, config: dict) -> Optional[np.ndarray]:
+    """Embed query text using OpenAI API."""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        logger.warning("OPENAI_API_KEY not set, cannot embed query")
+        return None
+
+    try:
+        client = OpenAI(api_key=api_key)
+        # Use same embedding model as cache (text-embedding-3-large = 3072 dims)
+        response = client.embeddings.create(
+            model="text-embedding-3-large",
+            input=text[:8000],  # Truncate to stay within limits
+            dimensions=config.get("expected_dimension", 3072)
+        )
+        return np.array(response.data[0].embedding, dtype=np.float32)
+    except Exception as e:
+        logger.warning(f"Failed to embed query: {e}")
+        return None
+
+
+def _gather_baseline_context(config: dict) -> str:
+    """Gather baseline context (always included docs)."""
+    baseline_files = config.get("baseline_files", ["README.md", "CLAUDE.md"])
+    max_chars = config.get("baseline_max_chars", 15000)
+    total_chars = 0
+    parts = []
+
+    for filename in baseline_files:
+        file_path = PROJECT_ROOT / filename
+        if file_path.exists() and file_path.is_file():
+            try:
+                content = file_path.read_text(encoding="utf-8", errors="replace")
+                # Truncate if too large
+                if len(content) > max_chars - total_chars:
+                    content = content[:max_chars - total_chars]
+                parts.append(f"=== {filename} ===\n{content}")
+                total_chars += len(content) + len(filename) + 10
+                if total_chars >= max_chars:
+                    break
+            except Exception as e:
+                logger.debug(f"Failed to read baseline file {filename}: {e}")
+
+    logger.debug(f"Baseline context: {total_chars} chars from {len(parts)} files")
+    return "\n\n".join(parts)
+
+
+def _gather_hybrid_context(
+    feature: str,
+    agent_name: Optional[str] = None,
+) -> str:
+    """
+    Gather context using hybrid strategy (PRP-011).
+
+    Combines:
+    1. BASELINE: Core project docs (always included)
+    2. SEMANTIC: Relevant chunks for this query/agent
+
+    Args:
+        feature: The feature description to use as query
+        agent_name: Optional agent name for per-agent context
+
+    Returns:
+        Combined context string
+    """
+    config = _load_retrieval_config()
+
+    if not config.get("enabled", True):
+        # Fallback to blind gathering
+        logger.info("Semantic retrieval disabled, using fallback")
+        return _gather_project_context()
+
+    # Step 1: Always include baseline docs
+    baseline = _gather_baseline_context(config)
+
+    # Step 2: Try semantic retrieval
+    retriever = _get_semantic_retriever()
+    if retriever is None or len(retriever) == 0:
+        # Fallback to blind gathering
+        logger.info("No embeddings available, using fallback")
+        fallback = _gather_project_context()
+        # Truncate fallback to leave room for baseline
+        max_fallback = config.get("semantic_max_chars", 100000) - len(baseline)
+        return f"{baseline}\n\n{fallback[:max_fallback]}"
+
+    # Build query (combine feature + agent description if per-agent enabled)
+    query_text = feature
+    if config.get("per_agent_context", True) and agent_name:
+        try:
+            agent_desc = load_agent_text(agent_name)[:500]
+            query_text = f"{feature}\n\n{agent_desc}"
+        except Exception:
+            pass
+
+    # Embed the query
+    query_vec = _embed_query(query_text, config)
+    if query_vec is None:
+        logger.warning("Failed to embed query, using fallback")
+        fallback = _gather_project_context()
+        max_fallback = config.get("semantic_max_chars", 100000)
+        return f"{baseline}\n\n{fallback[:max_fallback]}"
+
+    # Retrieve relevant chunks
+    agent_config = AgentContextConfig(
+        agent_name=agent_name or "default",
+        top_k=config.get("top_k", 30),
+        similarity_threshold=config.get("similarity_threshold", 0.3),
+    )
+
+    try:
+        results = retriever.retrieve(query_vec, config=agent_config)
+        logger.info(f"Retrieved {len(results)} semantic chunks for {agent_name or 'default'}")
+
+        # Build semantic context from results
+        semantic_parts = []
+        max_semantic = config.get("semantic_max_chars", 100000)
+        total_semantic = 0
+
+        for chunk in results:
+            # Use chunk content if available, or metadata source
+            content = chunk.content
+            if not content:
+                # Try to read content from metadata source file
+                source = chunk.metadata.get("source", "")
+                if source:
+                    source_path = PROJECT_ROOT / source
+                    if source_path.exists():
+                        try:
+                            content = source_path.read_text(encoding="utf-8", errors="replace")[:5000]
+                        except Exception:
+                            content = f"[Chunk {chunk.chunk_id} - score: {chunk.score:.3f}]"
+                    else:
+                        content = f"[Chunk {chunk.chunk_id} - score: {chunk.score:.3f}]"
+                else:
+                    content = f"[Chunk {chunk.chunk_id} - score: {chunk.score:.3f}]"
+
+            if total_semantic + len(content) > max_semantic:
+                break
+
+            semantic_parts.append(content)
+            total_semantic += len(content)
+
+        semantic = "\n\n".join(semantic_parts)
+        logger.info(f"Semantic context: {total_semantic} chars")
+
+        return f"{baseline}\n\n=== RELEVANT PROJECT CONTEXT ===\n{semantic}"
+
+    except Exception as e:
+        logger.warning(f"Semantic retrieval failed: {e}, using fallback")
+        fallback = _gather_project_context()
+        max_fallback = config.get("semantic_max_chars", 100000)
+        return f"{baseline}\n\n{fallback[:max_fallback]}"
+
+
 ## Workflow Nodes
 
 def initialize_node(state: PRPDraftState) -> PRPDraftState:
@@ -620,12 +844,22 @@ def initialize_node(state: PRPDraftState) -> PRPDraftState:
 
     logger.info(f"Project root: {PROJECT_ROOT}")
 
-    # Gather project context (README + tech stack)
-    project_context = _gather_project_context()
-    if project_context:
-        logger.info(f"Project context gathered: {len(project_context)} chars")
+    # PRP-012: Auto-bootstrap embedding cache if needed
+    # This ensures semantic retrieval works across any project
+    _ensure_embedding_cache(PROJECT_ROOT)
+
+    # Gather project context using hybrid strategy (PRP-011)
+    # Uses semantic retrieval when available, falls back to blind gathering
+    retrieval_config = _load_retrieval_config()
+    if retrieval_config.get("enabled", True):
+        project_context = _gather_hybrid_context(feature)
+        logger.info(f"Hybrid context gathered: {len(project_context)} chars (semantic retrieval)")
     else:
-        logger.info("No project context available")
+        project_context = _gather_project_context()
+        if project_context:
+            logger.info(f"Project context gathered: {len(project_context)} chars (blind)")
+        else:
+            logger.info("No project context available")
 
     logger.info(f"Feature: {feature[:100]}...")
     logger.info(f"Agents: {', '.join(agents)}")
@@ -857,6 +1091,7 @@ def process_results_node(state: PRPDraftState) -> PRPDraftState:
     raw_dir.mkdir(parents=True, exist_ok=True)
 
     consolidated_data = []
+    pending_questions = state.get("pending_questions", [])
 
     for item in items:
         # Extract custom_id from batch result
@@ -997,12 +1232,25 @@ def process_results_node(state: PRPDraftState) -> PRPDraftState:
 
         # Extract delegation suggestions
         suggested |= _extract_suggested_agents(validated.model_dump())
+
+        # Extract questions for iterative refinement
+        if validated.Questions:
+            for q in validated.Questions:
+                pending_questions.append({
+                    "target_agent": q.agent,
+                    "question": q.question,
+                    "asked_by": agent_tag,
+                    "answered": False
+                })
+
         consolidated_data.append({
             "agent": agent_tag,
             "response": validated.model_dump()
         })
 
     logger.info(f"Delegation suggestions: {', '.join(sorted(suggested))}")
+    if pending_questions:
+        logger.info(f"Questions extracted: {len(pending_questions)} (targets: {', '.join(sorted(set(q['target_agent'] for q in pending_questions)))})")
 
     # Calculate costs for this batch
     # Pricing: $3/MTok input, $15/MTok output for claude-opus-4
@@ -1030,6 +1278,7 @@ def process_results_node(state: PRPDraftState) -> PRPDraftState:
         "agents_seen": list(set(agents_seen) | seen_this_batch),
         "delegation_suggestions": list(set(all_suggestions) | suggested),
         "draft_files": draft_files,
+        "pending_questions": pending_questions,
         "tokens_input": total_tokens_in,
         "tokens_output": total_tokens_out,
         "total_tokens": total_tokens_in + total_tokens_out,
@@ -1090,6 +1339,187 @@ def prepare_followup_node(state: PRPDraftState) -> PRPDraftState:
         "status": "followup_prepared"
     }
 
+
+def deduplicate_questions(questions: list[dict]) -> list[dict]:
+    """
+    Deduplicate semantically similar questions across agents.
+
+    Multiple agents may ask the same or similar questions.
+    We group them and track all askers for attribution.
+
+    Example:
+      Agent A: "What shade of blue?"
+      Agent B: "Which blue color should be used?"
+    → Deduplicated: "What shade of blue?" (asked by: [A, B])
+    """
+    from collections import defaultdict
+
+    if not questions:
+        return []
+
+    # Group by target agent first
+    by_target = defaultdict(list)
+    for q in questions:
+        by_target[q["target_agent"]].append(q)
+
+    deduplicated = []
+    for agent, agent_questions in by_target.items():
+        seen = []
+        for q in agent_questions:
+            # Check for semantic similarity using keyword overlap
+            is_duplicate = False
+            for existing in seen:
+                if _questions_are_similar(q["question"], existing["question"]):
+                    # Merge askers
+                    if isinstance(existing["asked_by"], list):
+                        existing["asked_by"].append(q["asked_by"])
+                    else:
+                        existing["asked_by"] = [existing["asked_by"], q["asked_by"]]
+                    is_duplicate = True
+                    break
+            if not is_duplicate:
+                # Convert asked_by to list for consistency
+                q_copy = q.copy()
+                if not isinstance(q_copy["asked_by"], list):
+                    q_copy["asked_by"] = [q_copy["asked_by"]]
+                seen.append(q_copy)
+        deduplicated.extend(seen)
+
+    return deduplicated
+
+
+def _questions_are_similar(q1: str, q2: str, threshold: float = 0.5) -> bool:
+    """
+    Check if two questions are semantically similar using keyword overlap.
+
+    Uses Jaccard similarity on words.
+    """
+    # Normalize: lowercase, remove punctuation
+    import re
+    def normalize(s):
+        return set(re.sub(r'[^\w\s]', '', s.lower()).split())
+
+    words1 = normalize(q1)
+    words2 = normalize(q2)
+
+    if not words1 or not words2:
+        return False
+
+    intersection = words1 & words2
+    union = words1 | words2
+    similarity = len(intersection) / len(union)
+
+    return similarity >= threshold
+
+
+def route_questions_node(state: PRPDraftState) -> PRPDraftState:
+    """
+    Route deduplicated questions to target agents using synchronous API.
+
+    Questions are small and don't need batch API cost savings.
+    Faster response time with synchronous calls.
+    """
+    logger.info("\n=== Route Questions Node ===")
+
+    pending = state.get("pending_questions", [])
+    answered = state.get("answered_questions", [])
+
+    if not pending:
+        logger.info("No pending questions to route")
+        return {**state, "status": "no_questions"}
+
+    # Step 1: Deduplicate similar questions
+    deduplicated = deduplicate_questions(pending)
+    logger.info(f"Deduplicated {len(pending)} questions to {len(deduplicated)}")
+
+    # Step 2: Filter to known agents only (check if agent file exists)
+    def agent_exists(name: str) -> bool:
+        """Check if agent file exists in registry."""
+        for base in AGENT_DIRS:
+            if (base / f"{name}.md").exists():
+                return True
+        return False
+
+    valid = []
+    dropped_agents = []
+    for q in deduplicated:
+        target = q["target_agent"]
+        if agent_exists(target):
+            valid.append(q)
+        else:
+            dropped_agents.append(target)
+
+    if dropped_agents:
+        logger.info(f"Dropped {len(dropped_agents)} questions targeting unknown agents: {', '.join(set(dropped_agents))}")
+
+    if not valid:
+        logger.info("No valid questions after filtering")
+        return {**state, "pending_questions": [], "status": "no_valid_questions"}
+
+    # Step 3: Call agents synchronously (NOT batch - questions are small)
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    client = Anthropic(api_key=api_key)
+
+    newly_answered = []
+    for q in valid:
+        target = q["target_agent"]
+        question_text = q["question"]
+        askers = q["asked_by"]
+
+        logger.info(f"Routing question to {target}: {question_text[:50]}...")
+
+        # Load agent system prompt
+        try:
+            agent_prompt = load_agent_text(target)
+        except FileNotFoundError:
+            logger.warning(f"Agent {target} not found, skipping question")
+            continue
+
+        # Call agent synchronously
+        try:
+            response = client.messages.create(
+                model=MODEL_ID,
+                max_tokens=1024,
+                system=agent_prompt,
+                messages=[{
+                    "role": "user",
+                    "content": f"Please answer this question from other agents:\n\n{question_text}\n\nProvide a concise, direct answer."
+                }]
+            )
+            answer_text = response.content[0].text if response.content else ""
+            logger.info(f"  → Answer received ({len(answer_text)} chars)")
+
+            newly_answered.append({
+                "question": question_text,
+                "asked_by": askers,
+                "routed_to": target,
+                "answer": answer_text,
+                "answered": True
+            })
+        except Exception as e:
+            logger.error(f"Error calling {target}: {e}")
+            # Keep question as unanswered for retry
+            newly_answered.append({
+                **q,
+                "error": str(e),
+                "answered": False
+            })
+
+    # Merge with previously answered questions
+    all_answered = answered + [q for q in newly_answered if q.get("answered")]
+    still_pending = [q for q in newly_answered if not q.get("answered")]
+
+    logger.info(f"Questions answered: {len([q for q in newly_answered if q.get('answered')])}")
+    logger.info(f"Questions still pending: {len(still_pending)}")
+
+    return {
+        **state,
+        "pending_questions": still_pending,
+        "answered_questions": all_answered,
+        "status": "questions_routed"
+    }
+
+
 def compile_draft_responses_node(state: PRPDraftState) -> PRPDraftState:
     """Compile all draft responses into a consolidated file."""
     draft_files = state.get("draft_files", [])
@@ -1113,6 +1543,215 @@ def compile_draft_responses_node(state: PRPDraftState) -> PRPDraftState:
         "compilation_status": "drafts_compiled",
         "draft_phase_complete": True
     }
+
+
+def consolidate_prp_node(state: PRPDraftState) -> PRPDraftState:
+    """
+    Consolidate all agent responses into a single executable PRP.
+
+    This produces the final PRP file with:
+    - Deduplicated atomic tasks
+    - Resolved questions
+    - User stories and validation checks
+    """
+    logger.info("\n=== Consolidate PRP Node ===")
+
+    draft_files = state.get("draft_files", [])
+    answered_questions = state.get("answered_questions", [])
+    timestamp = state.get("timestamp", "draft")
+    feature = state.get("feature_description", "")
+    agents_seen = state.get("agents_seen", [])
+    pass_num = state.get("pass_number", 0)
+
+    # Collect all tasks from all agents
+    all_tasks = []
+    for df in draft_files:
+        try:
+            with open(df, "r") as f:
+                data = json.load(f)
+                if "proposed_tasks" in data:
+                    for task in data["proposed_tasks"]:
+                        task["source_agent"] = data.get("agent", "unknown")
+                        all_tasks.append(task)
+        except Exception as e:
+            logger.warning(f"Error reading {df}: {e}")
+
+    logger.info(f"Collected {len(all_tasks)} tasks from {len(draft_files)} draft files")
+
+    # Deduplicate tasks by objective similarity
+    deduplicated_tasks = _deduplicate_tasks(all_tasks)
+    logger.info(f"Deduplicated to {len(deduplicated_tasks)} unique tasks")
+
+    # Build atomic tasks with user story format
+    atomic_tasks = []
+    for i, task in enumerate(deduplicated_tasks, start=1):
+        atomic_task = {
+            "task_id": f"T-{i:03d}",
+            "agent": task.get("agent", task.get("source_agent", "unknown")),
+            "objective": task.get("objective", ""),
+            "user_story": _generate_user_story(task),
+            "acceptance_criteria": task.get("acceptance", []),
+            "validation_checks": _generate_validation_checks(task),
+            "effort": task.get("effort", "M"),
+            "dependencies": task.get("dependencies", []),
+            "blocked_by": []
+        }
+        atomic_tasks.append(atomic_task)
+
+    # Build final PRP structure
+    prp = {
+        "prp_id": f"PRP-{timestamp}",
+        "feature": feature,
+        "status": "ready_for_execution",
+        "passes_completed": pass_num,
+        "agents_consulted": sorted(set(agents_seen)),
+        "atomic_tasks": atomic_tasks,
+        "questions_resolved": answered_questions
+    }
+
+    # Save the consolidated PRP
+    prp_dir = PROJECT_ROOT / "prp" / "active"
+    prp_dir.mkdir(parents=True, exist_ok=True)
+    prp_path = prp_dir / f"PRP-{timestamp}.json"
+    prp_path.write_text(json.dumps(prp, indent=2), encoding="utf-8")
+
+    logger.info(f"Saved consolidated PRP: {prp_path}")
+    logger.info(f"  Atomic tasks: {len(atomic_tasks)}")
+    logger.info(f"  Questions resolved: {len(answered_questions)}")
+
+    return {
+        **state,
+        "prp_path": str(prp_path),
+        "compilation_status": "prp_consolidated",
+        "draft_phase_complete": True
+    }
+
+
+def _deduplicate_tasks(tasks: list[dict]) -> list[dict]:
+    """Deduplicate tasks by objective similarity."""
+    if not tasks:
+        return []
+
+    deduplicated = []
+    for task in tasks:
+        is_duplicate = False
+        for existing in deduplicated:
+            if _tasks_are_similar(task.get("objective", ""), existing.get("objective", "")):
+                # Merge acceptance criteria
+                existing_acceptance = existing.get("acceptance", [])
+                new_acceptance = task.get("acceptance", [])
+                merged = _deduplicate_acceptance_criteria(existing_acceptance + new_acceptance)
+                existing["acceptance"] = merged
+
+                # Track contributing agents
+                if "contributing_agents" not in existing:
+                    existing["contributing_agents"] = [existing.get("source_agent", "unknown")]
+                existing["contributing_agents"].append(task.get("source_agent", "unknown"))
+
+                is_duplicate = True
+                break
+        if not is_duplicate:
+            task_copy = task.copy()
+            task_copy["contributing_agents"] = [task.get("source_agent", "unknown")]
+            deduplicated.append(task_copy)
+
+    return deduplicated
+
+
+def _tasks_are_similar(obj1: str, obj2: str, threshold: float = 0.35) -> bool:
+    """
+    Check if two task objectives are similar.
+
+    Uses Jaccard similarity on normalized words.
+    Threshold 0.35 catches variations like:
+    - "Create index.html with blue background"
+    - "Create hello world HTML page with blue background"
+    """
+    import re
+    def normalize(s):
+        # Remove punctuation, lowercase, split into words
+        words = set(re.sub(r'[^\w\s]', '', s.lower()).split())
+        # Remove common stop words
+        stop_words = {'a', 'an', 'the', 'and', 'or', 'with', 'for', 'to', 'in', 'on', 'at'}
+        return words - stop_words
+
+    words1 = normalize(obj1)
+    words2 = normalize(obj2)
+
+    if not words1 or not words2:
+        return False
+
+    intersection = words1 & words2
+    union = words1 | words2
+    similarity = len(intersection) / len(union)
+
+    return similarity >= threshold
+
+
+def _deduplicate_acceptance_criteria(criteria: list[str]) -> list[str]:
+    """
+    Deduplicate similar acceptance criteria.
+
+    Groups semantically similar criteria and keeps the most detailed version.
+    """
+    if not criteria:
+        return []
+
+    import re
+    def normalize(s):
+        return set(re.sub(r'[^\w\s]', '', s.lower()).split())
+
+    deduplicated = []
+    for criterion in criteria:
+        is_duplicate = False
+        criterion_words = normalize(criterion)
+
+        for i, existing in enumerate(deduplicated):
+            existing_words = normalize(existing)
+
+            if not criterion_words or not existing_words:
+                continue
+
+            # Check similarity
+            intersection = criterion_words & existing_words
+            union = criterion_words | existing_words
+            similarity = len(intersection) / len(union)
+
+            if similarity >= 0.5:  # 50% word overlap = duplicate
+                # Keep the longer/more detailed version
+                if len(criterion) > len(existing):
+                    deduplicated[i] = criterion
+                is_duplicate = True
+                break
+
+        if not is_duplicate:
+            deduplicated.append(criterion)
+
+    return deduplicated
+
+
+def _generate_user_story(task: dict) -> str:
+    """Generate a user story from task objective."""
+    objective = task.get("objective", "")
+    # Simple template - could be enhanced with LLM
+    return f"As a developer, I can {objective.lower()} so that the feature is complete"
+
+
+def _generate_validation_checks(task: dict) -> list[dict]:
+    """Generate validation checks from acceptance criteria."""
+    checks = []
+    for criterion in task.get("acceptance", []):
+        # Parse criterion to determine check type
+        criterion_lower = criterion.lower()
+        if "file" in criterion_lower and "exist" in criterion_lower:
+            checks.append({"type": "file_exists", "description": criterion})
+        elif "valid" in criterion_lower:
+            checks.append({"type": "validation", "description": criterion})
+        elif "test" in criterion_lower:
+            checks.append({"type": "test_passes", "description": criterion})
+        else:
+            checks.append({"type": "manual_check", "description": criterion})
+    return checks
 
 
 def success_node(state: PRPDraftState) -> PRPDraftState:
@@ -1190,48 +1829,73 @@ def poll_router(state: PRPDraftState) -> str:
 
 
 def followup_router(state: PRPDraftState) -> str:
-    """Router function: decide whether to run followup pass or finish."""
+    """Router function: decide whether to run followup pass or finish.
+
+    Checks BOTH delegation suggestions AND pending questions.
+    Continues iteration if EITHER has pending items.
+    """
     agents_to_query = state.get("agents_to_query", [])
+    pending_questions = state.get("pending_questions", [])
     status = state.get("status", "")
+    pass_num = state.get("pass_number", 0)
+    max_passes = state.get("max_passes", 10)  # Default to 10 for question refinement
 
     # Max passes reached - finish
-    if status == "max_passes_reached":
+    if status == "max_passes_reached" or pass_num >= max_passes:
+        logger.info(f"Max passes reached ({pass_num}/{max_passes}) - finishing")
         return "done"
 
     # No valid agents (all failed to load) - finish
     if status == "no_agents":
         return "done"
 
+    # Have pending questions - route them first
+    unanswered = [q for q in pending_questions if not q.get("answered")]
+    if unanswered:
+        logger.info(f"Have {len(unanswered)} unanswered questions - routing")
+        return "route_questions"
+
     # Have agents to query - run followup
     if agents_to_query:
         return "followup"
 
-    # No more agents - finish
+    # No more agents or questions - finish
     return "done"
 
 
 ## Build StateGraph
 
 def build_workflow() -> StateGraph:
-    """Build the PRP Draft workflow using LangGraph."""
+    """Build the PRP Draft workflow using LangGraph.
+
+    Workflow with iterative refinement:
+    1. Initial batch of agents analyze feature
+    2. Extract questions and delegations from responses
+    3. Route questions to target agents (sync API)
+    4. Query delegated agents (batch API)
+    5. Repeat until convergence or max passes
+    6. Consolidate into single executable PRP
+    """
     workflow = StateGraph(PRPDraftState)
 
-    # Add all nodes (Lesson 01)
+    # Add all nodes
     workflow.add_node("initialize", initialize_node)
     workflow.add_node("submit_batch", submit_batch_node)
     workflow.add_node("poll_batch", poll_batch_node)
     workflow.add_node("process_results", process_results_node)
+    workflow.add_node("route_questions", route_questions_node)  # NEW: Question routing
     workflow.add_node("prepare_followup", prepare_followup_node)
     workflow.add_node("compile_draft_responses", compile_draft_responses_node)
+    workflow.add_node("consolidate_prp", consolidate_prp_node)  # NEW: Final PRP
     workflow.add_node("success", success_node)
 
     # Set entry point
     workflow.set_entry_point("initialize")
 
-    # Simple edges (Lesson 01)
+    # Simple edges
     workflow.add_edge("initialize", "submit_batch")
 
-    # Conditional edge: polling loop (Lesson 03)
+    # Conditional edge: polling loop
     workflow.add_conditional_edges(
         "submit_batch",
         poll_router,
@@ -1246,7 +1910,7 @@ def build_workflow() -> StateGraph:
         "poll_batch",
         poll_router,
         {
-            "pending": "poll_batch",  # Loop back (retry pattern from Lesson 04)
+            "pending": "poll_batch",  # Loop back (retry pattern)
             "complete": "process_results",
             "failed": END
         }
@@ -1255,17 +1919,24 @@ def build_workflow() -> StateGraph:
     # Process results then prepare followup
     workflow.add_edge("process_results", "prepare_followup")
 
-    # Conditional edge: followup loop or finish
+    # Conditional edge: question routing, followup, or finish
     workflow.add_conditional_edges(
         "prepare_followup",
         followup_router,
         {
+            "route_questions": "route_questions",  # NEW: Route pending questions
             "followup": "submit_batch",  # Loop back for another pass
             "done": "compile_draft_responses"
         }
     )
 
-    workflow.add_edge("compile_draft_responses", "success")
+    # After routing questions, go back to prepare_followup to check for more work
+    workflow.add_edge("route_questions", "prepare_followup")
+
+    # After compiling drafts, consolidate into final PRP
+    workflow.add_edge("compile_draft_responses", "consolidate_prp")
+    workflow.add_edge("consolidate_prp", "success")
+
     # Success terminal edge
     workflow.add_edge("success", END)
 

@@ -61,6 +61,29 @@ validation:
     dimensions: 1536
     batch_size: 100
 
+# Semantic Retrieval Settings (PRP-011)
+retrieval:
+  enabled: true
+  top_k: 30                       # Number of chunks to retrieve per agent
+  similarity_threshold: 0.3       # Minimum cosine similarity
+  per_agent_context: true         # Customize context per agent
+
+  # Hybrid strategy: baseline docs always included + semantic retrieval
+  baseline_files:
+    - "README.md"
+    - "CLAUDE.md"
+    - "docs/ARCHITECTURE.md"
+  baseline_max_chars: 15000       # Max chars for baseline context
+  semantic_max_chars: 100000      # Max chars for semantic context
+
+  # Cache settings
+  cache_dir: ".emb_cache"
+  expected_dimension: 3072        # text-embedding-3-large dimension
+
+  # Security validation (SR-1, SR-2)
+  reject_nan_inf: true
+  reject_zero_vectors: true
+
 # CI/CD Gate Settings
 cicd:
   max_retry_attempts: 3
