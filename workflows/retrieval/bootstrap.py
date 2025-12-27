@@ -23,6 +23,16 @@ import stat
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+# Load .env from workflow directory (fallback for API keys)
+try:
+    from dotenv import load_dotenv
+    _workflow_root = Path(__file__).parent.parent.parent
+    _env_file = _workflow_root / ".env"
+    if _env_file.exists():
+        load_dotenv(_env_file, override=False)
+except ImportError:
+    pass  # dotenv not required
+
 # Lazy import for OpenAI - check availability
 try:
     from openai import OpenAI
