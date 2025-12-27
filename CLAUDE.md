@@ -1,156 +1,167 @@
-# LangGraph Learning Journey
+# LangChainWorkflows - PRP Workflow System
 
-## Project Type
+## Project Overview
 
-**This is a LEARNING PROJECT** - The goal is to understand LangGraph by building it step-by-step, not to rush to a complex implementation.
+Production-ready PRP (Product Requirements Proposal) workflow system built with LangGraph. Orchestrates multi-agent task decomposition using Claude Batch API with iterative refinement.
 
 ## Current Status
 
-- **Phase**: Clean slate - Starting from absolute basics
-- **Version**: 0.2.0-clean-slate
-- **Current Lesson**: 01 - Hello LangGraph
-- **Approach**: Incremental learning through hands-on building
-- **Current Focus**: Understanding fundamentals before adding complexity (prp-workflow.py will eventually become production-ready)
+- **Phase**: Production workflow development
+- **Version**: 0.3.0
+- **Primary Workflow**: `prp-draft.py` - Multi-agent PRP decomposition
+- **Secondary Workflow**: `prp-workflow.py` - Full validation pipeline (in development)
 
-## Learning Goals
+## Architecture
 
-1. **Understand LangGraph fundamentals** before adding complexity
-2. **Build production-ready PRP workflow** incrementally over 10 lessons
-3. **Learn by doing** with real code, not just reading docs
-4. **Make mistakes and learn from them** in a safe environment
-
-## What We're Building (Eventually)
-
-A production-ready PRP (Product Requirements Proposal) workflow with:
-- 6 validation gates (TDD, coverage, mocks, mutation, security, production-ready)
-- Intelligent retry logic and circuit breaker patterns
-- Multi-agent specialist consultation
-- Cost optimization through context sharing
-- Complete state management
-
-But we're starting with the simplest possible workflow first!
-
-## Repository Structure
+### Core Components
 
 ```
 LangChainWorkflows/
-├── lessons/              # Step-by-step learning modules
-│   ├── 00-setup/        # Environment setup ✅
-│   ├── 01-hello-langgraph/  # First workflow 🔄
-│   ├── 02-state-management/ # Complex state 📋
-│   ├── 03-conditional-routing/ # Smart edges 📋
-│   ├── 04-retry-patterns/ # Failure handling 📋
-│   ├── 05-claude-api/ # LLM integration 📋
-│   ├── 06-multi-node/ # Complex workflows 📋
-│   ├── 07-cost-optimization/ # Caching 📋
-│   ├── 08-multi-agent/ # Agent coordination 📋
-│   ├── 09-complete-prp/ # Full implementation 📋
-│   └── 10-production/ # Deployment 📋
-├── docs/                 # Reference documentation
-├── .env                  # API keys (not in git)
-├── .gitignore            # Git exclusions
-├── requirements.txt      # Minimal dependencies
-├── README.md            # Project overview
-└── CLAUDE.md            # This file (project instructions)
+├── workflows/
+│   ├── prp-draft.py          # Primary: Panel decomposition workflow
+│   ├── prp-workflow.py       # Secondary: Full 6-layer validation pipeline
+│   ├── lang_graph_workflow.py # Headless execution orchestrator
+│   ├── schemas/
+│   │   ├── prp_draft.py      # Pydantic schemas (Draft001, ProposedTask)
+│   │   └── prp_schemas.py    # Validation result schemas
+│   ├── validation/
+│   │   ├── embedding_similarity.py  # Cosine similarity validation
+│   │   ├── reading_check.py         # LLM comprehension check
+│   │   ├── pydantic_validator.py    # Structural validation
+│   │   └── consistency_check.py     # PRP vs implementation check
+│   ├── agents/
+│   │   ├── agent_loader.py   # Agent discovery and loading
+│   │   └── agent_executor.py # Agent execution wrapper
+│   ├── state/
+│   │   └── workflow_state.py # State management utilities
+│   └── cicd/
+│       └── gate_checker.py   # CI/CD gate validation
+├── headless_operation.py     # Batch/loop mode automation
+├── config/
+│   └── headless_config.yaml  # Workflow configuration
+├── templates/prp/            # Output templates
+├── prompts/prp/              # Agent prompts
+├── docs/                     # Reference documentation
+├── prp/                      # PRP artifacts (drafts, active, raw)
+└── .emb_cache/               # Embedding cache (OpenAI)
 ```
 
-## Development Philosophy
+### Workflow: prp-draft.py
 
-### Start Simple, Build Up
+Multi-agent panel decomposition with iterative refinement:
 
-Each lesson builds on the previous one:
+```
+Initialize → Submit Batch → Poll → Process Results → Prepare Followup
+                                         ↓
+                              [Route Questions if any]
+                                         ↓
+                              [Loop back if new agents]
+                                         ↓
+                           Compile Drafts → Consolidate PRP → Success
+```
 
-1. **Lesson 01**: 2-node workflow (greet → farewell)
-2. **Lesson 02**: Add complex state management
-3. **Lesson 03**: Add conditional routing (if/then logic)
-4. **Lesson 04**: Add retry patterns
-5. **Lesson 05**: Integrate Claude API
-6. **Lesson 06**: Build multi-node workflows
-7. **Lesson 07**: Optimize costs with caching
-8. **Lesson 08**: Coordinate multiple agents
-9. **Lesson 09**: Implement complete PRP workflow
-10. **Lesson 10**: Deploy to production
+**Features**:
+- Claude Batch API with prompt caching (1h TTL)
+- Strict schema validation (Pydantic `Draft001`)
+- Followup filtering (only real agents from registry)
+- Question routing for iterative refinement
+- Automatic project context gathering (150K char limit)
+- Cost tracking per batch
 
-### Learning Principles
+### Embeddings
 
-- **Understand Before Implementing**: No copy-paste without understanding
-- **Test Everything**: Verify each lesson works before moving on
-- **Make Mistakes**: They're part of learning
-- **Document Learnings**: Add comments explaining "why"
-- **Refactor Fearlessly**: Improve as you learn more
+**Current Usage**:
+- OpenAI `text-embedding-3-large` via `CacheBackedEmbeddings`
+- Cached to `.emb_cache/` (content-addressed, SHA256 keys)
+- Used for cosine similarity validation in `embedding_similarity.py`
 
-## Backup of Complex Code
+**Planned Enhancement**:
+- Semantic retrieval for context optimization (see PRP backlog)
 
-All previous complex implementation is safely backed up:
+## Running the Workflows
 
-- **Branch**: `backup-complex-implementation`
-- **Tag**: `v0.1.0-backup-complex`
+### PRP Draft (Primary)
 
-To view the complex code:
 ```bash
-git checkout backup-complex-implementation
+# From target project directory
+python /path/to/LangChainWorkflows/workflows/prp-draft.py prp/idea.md
+
+# With custom agents
+python workflows/prp-draft.py prp/idea.md --agents security-reviewer,devops-engineer
+
+# With logging
+python workflows/prp-draft.py prp/idea.md --log-file prp/draft.log
 ```
 
-To return to learning:
+### Headless Operation
+
 ```bash
-git checkout main
+# Batch mode (process all PRPs once)
+python headless_operation.py --batch --config config/headless_config.yaml
+
+# Loop mode (continuous, 10-minute intervals)
+python headless_operation.py --loop --config config/headless_config.yaml
 ```
 
-## Guidelines for Claude (AI Assistant)
+## Configuration
 
-When helping with this project:
+Key settings in `config/headless_config.yaml`:
 
-1. **Teach, Don't Just Solve**
-   - Explain concepts before showing code
-   - Ask if I understand before moving forward
-   - Point out common mistakes to avoid
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `validation.embedding_similarity_threshold` | 0.9 | Semantic drift detection |
+| `batch_operation.loop_interval` | 600 | Seconds between loop runs |
+| `agents.agent_dirs` | `~/.claude/agents` | Agent registry location |
+| `cicd.required_gates` | 6 gates | TDD, mocks, contracts, coverage, mutation, security |
 
-2. **Follow the Lesson Plan**
-   - Don't jump ahead to complex features
-   - Stay within the current lesson's scope
-   - Build on what's already learned
+## Agent Integration
 
-3. **Encourage Experimentation**
-   - Suggest "what if" experiments
-   - Help debug when experiments fail
-   - Explain why things work or don't work
+Agents are loaded from `~/.claude/agents/*.md`. The workflow:
+1. Queries BASE_AGENTS (9 specialists) in initial batch
+2. Extracts `delegation_suggestions` from responses
+3. Filters to known agents only (via `discover_agents()`)
+4. Queries new agents in followup batches
+5. Routes inter-agent questions synchronously
 
-4. **Keep It Simple**
-   - No production-ready requirements until later lessons
-   - Focus on understanding, not perfection
-   - One concept at a time
+## Output Structure
 
-5. **Real Production Code**
-   - This WILL become production code eventually
-   - Write clean, working code (not just examples)
-   - Follow Python best practices
-   - But don't over-engineer early lessons
+```
+prp/
+├── drafts/           # Individual agent responses (JSON)
+├── raw/              # Raw response text (debugging)
+├── active/           # Consolidated PRPs ready for execution
+│   └── PRP-YYYYMMDD-HHMMSS.json
+└── state.json        # Persistent state for loop mode
+```
 
-## Key LangGraph Concepts
+## Known Limitations
 
-These are what I'm learning through the lessons:
+1. **Context Assembly**: Currently gathers up to 150K chars blindly; no semantic filtering
+2. **Embedding Retrieval**: Embeddings computed but not used for context selection
+3. **lessons/ Directory**: Legacy structure from initial learning phase (can be removed)
 
-1. **StateGraph**: The workflow container
-2. **TypedDict**: Schema for state
-3. **Nodes**: Functions that receive and return state
-4. **Edges**: Connections between nodes (simple and conditional)
-5. **Compilation**: Turning the graph into an executable app
-6. **Invocation**: Running the workflow with initial state
+## Development Guidelines
 
-## Resources
+1. **Schema Validation**: All agent responses must pass `Draft001` schema
+2. **Agent Filtering**: Only query agents that exist in registry
+3. **Cost Tracking**: Monitor token usage; warn if batch exceeds $10
+4. **Prompt Caching**: Use `cache_control: {"type": "ephemeral", "ttl": "1h"}` for reusable blocks
 
-- [LangGraph Documentation](https://python.langchain.com/docs/langgraph)
-- [Anthropic Claude API](https://docs.anthropic.com/)
-- [Project README](./README.md)
-- [LEARNING_GUIDE.md](./LEARNING_GUIDE.md) (if it exists)
+## Dependencies
+
+- Python 3.13+
+- LangGraph 1.0.2
+- Anthropic SDK (Claude Batch API)
+- OpenAI SDK (embeddings)
+- Pydantic 2.x
 
 ## Version History
 
-- **v0.1.0-backup-complex**: Complex implementation (backed up)
-- **v0.2.0-clean-slate**: Fresh start for learning (current)
+- **v0.1.0**: Initial complex implementation (backed up to `backup-complex-implementation` branch)
+- **v0.2.0**: Clean slate attempt (learning structure)
+- **v0.3.0**: Production PRP workflow with schema validation and agent filtering
 
 ---
 
-**Started**: October 31, 2025
-**Restarted**: November 2, 2025
-**Current Focus**: Understanding the fundamentals
+**Repository**: LangChainWorkflows
+**Last Updated**: December 2025
