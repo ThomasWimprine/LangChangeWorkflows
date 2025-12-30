@@ -1025,7 +1025,12 @@ def poll_batch_node(state: PRPDraftState) -> PRPDraftState:
 
     # Exponential backoff with jitter (Lesson 04)
     if poll_count > 0:
-        delay = min(poll_delay * (2 ** poll_count), 60)  # Max 60s
+        # After ~5-6 polls, exponential backoff exceeds 60s cap anyway
+        # Skip calculation to avoid overflow on long-running batches
+        if poll_count >= 6:
+            delay = 60.0
+        else:
+            delay = min(poll_delay * (2 ** poll_count), 60)  # Max 60s
         jitter = random.uniform(0, delay * 0.1)  # 10% jitter
         actual_delay = delay + jitter
         logger.info(f"Waiting {actual_delay:.1f}s before poll {poll_count + 1}...")
